@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { runSpec } from '../src/runner.js';
 import type { SpecConfig } from '../src/config.js';
+import { analyzeVarChain } from '../src/analyze.js';
 
 let server: Server;
 let port: number;
@@ -120,6 +121,34 @@ beforeAll(async () => {
       if (req.method === 'DELETE') {
         res.writeHead(204);
         res.end();
+        return;
+      }
+
+      // Returns false as JSON response
+      if (url.pathname === '/v1/returns-false') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('false');
+        return;
+      }
+
+      // Returns true as JSON response
+      if (url.pathname === '/v1/returns-true') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('true');
+        return;
+      }
+
+      // Returns 0 as JSON response
+      if (url.pathname === '/v1/returns-zero') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('0');
+        return;
+      }
+
+      // Echo whether a body was actually received (for falsey body testing)
+      if (req.method === 'POST' && url.pathname === '/v1/echo-body-received') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ bodyReceived: body.length > 0, rawBody: body }));
         return;
       }
 
@@ -717,6 +746,96 @@ Authorization: none
     const result = await runSpec(md, config());
     const step = (result.tests[0] as any).failedStep;
     expect(step.status).toBe(500); // server returns 500, spec expects 200
+  });
+
+  // ── Bug: falsey request/response bodies (v0.8) ──
+  // `if (step.body)` and `if (step.response)` skip valid falsey values
+
+  it('BUG: spec asserting response `false` should fail when server returns `true`', async () => {
+    // Spec asserts `false` as expected response. Server actually returns `true`.
+    // BUG: `if (step.response)` — step.response is `false` (falsey) → check is SKIPPED
+    //      → test passes vacuously when it should fail.
+    // FIX: check `step.response !== null` so falsey JSON values are still checked.
+    const md = `# API
+
+## Falsey response should mismatch
+
+**Request** → \`GET /v1/returns-true\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+false
+\`\`\`
+`;
+    // Server returns true, spec asserts false → should fail
+    const result = await runSpec(md, config());
+    expect(result.failed).toBe(1); // RED: currently passes because if(false) skips check
+  });
+
+  it('BUG: spec with request body `false` should send it; currently body is skipped', async () => {
+    // Spec has request body `false`. Runner does `if (step.body)` which is falsey.
+    // BUG: body is not sent → server receives no body.
+    // FIX: check `step.body !== null` → body is sent correctly.
+    const md = `# API
+
+## Send falsey body
+
+**Request** → \`POST /v1/echo-body-received\`
+
+\`\`\`json
+false
+\`\`\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"bodyReceived": true}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    expect(result.passed).toBe(1); // RED: fails because body isn't sent
+  });
+
+  it('BUG: spec with request body `0` should send it; currently body is skipped', async () => {
+    const md = `# API
+
+## Send zero body
+
+**Request** → \`POST /v1/echo-body-received\`
+
+\`\`\`json
+0
+\`\`\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"bodyReceived": true}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    expect(result.passed).toBe(1); // RED: fails because body isn't sent
+  });
+
+  // ── Bug: runSpec doesn't surface var-chain warnings (v0.8) ──
+  // specdown check shows them; specdown run silently omits them.
+
+  it('BUG: runSpec should include var-chain warnings when $var is never saved', async () => {
+    // Spec uses $id in path but nothing saves $id.
+    // specdown check warns about this; specdown run silently skips the warning.
+    // FIX: runSpec calls analyzeVarChain and merges warnings into result.warnings.
+    const md = `# API
+
+## Fetch by ID
+
+**Request** → \`GET /v1/chain/$id\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const result = await runSpec(md, config());
+    // RED: result.warnings is currently empty (only parseWarnings, no chain analysis)
+    expect(result.warnings.some(w => w.includes('$id'))).toBe(true);
   });
 
   it('does not time out when timeout is large enough', async () => {

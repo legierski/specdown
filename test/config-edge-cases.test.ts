@@ -25,7 +25,7 @@ describe('parseConfigFile edge cases', () => {
     writeFileSync(file, '[http\nbase = broken syntax');
     const config = parseConfigFile(file);
     // Should return default, not crash
-    expect(config.http.base).toBe('http://localhost');
+    expect(config.http.base).toBe('http://localhost:3000');
   });
 
   it('handles TOML with unrelated sections (ignores them)', () => {
@@ -39,8 +39,30 @@ describe('parseConfigFile edge cases', () => {
     const file = join(tmpDir, '.specdown');
     writeFileSync(file, `[http]\ntimeout = 3000\n`);
     const config = parseConfigFile(file);
-    // No base → returns default
-    expect(config.http.base).toBe('http://localhost');
+    // No base → currently returns defaultConfig() (Bug 3 means the timeout is lost too)
+    expect(config.http.base).toBe(defaultConfig().http.base);
+  });
+
+  it('BUG: root .specdown with only headers (no base) should preserve headers', () => {
+    // Root .specdown: [http.headers] Authorization = "Bearer token" but no base.
+    // BUG: parseConfigFile checks `!partial.http.base` and returns defaultConfig(),
+    //      silently discarding the headers.
+    // Subdirectory configs can be partial — root should be too.
+    // FIX: merge partial with defaults instead of replacing.
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[http.headers]\nAuthorization = "Bearer root-token"\n`);
+    const config = parseConfigFile(file);
+    // RED: currently returns defaultConfig() which has empty headers
+    expect(config.http.headers['Authorization']).toBe('Bearer root-token');
+  });
+
+  it('BUG: root .specdown with only timeout (no base) should preserve timeout', () => {
+    // Same root-partial bug — timeout-only config should merge with defaults
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[http]\ntimeout = 1000\n`);
+    const config = parseConfigFile(file);
+    // RED: currently returns defaultConfig() with timeout=5000
+    expect(config.http.timeout).toBe(1000);
   });
 
   it('handles http.headers with many headers', () => {
@@ -183,9 +205,17 @@ describe('resolveConfig edge cases', () => {
 // ──────────────────────────────────────
 
 describe('defaultConfig', () => {
+  it('BUG: default base should be http://localhost:3000 to match CLI help text', () => {
+    // Help text says: `specdown run --base URL  Set base URL (default: http://localhost:3000)`
+    // Actual: defaultConfig() returns http://localhost
+    // FIX: change defaultConfig() base to http://localhost:3000
+    const config = defaultConfig();
+    expect(config.http.base).toBe('http://localhost:3000'); // RED: currently http://localhost
+  });
+
   it('returns expected defaults', () => {
     const config = defaultConfig();
-    expect(config.http.base).toBe('http://localhost');
+    // timeout should always be 5000
     expect(config.http.timeout).toBe(5000);
   });
 
@@ -200,6 +230,6 @@ describe('defaultConfig', () => {
     const a = defaultConfig();
     const b = defaultConfig();
     a.http.base = 'modified';
-    expect(b.http.base).toBe('http://localhost');
+    expect(b.http.base).toBe('http://localhost:3000');
   });
 });

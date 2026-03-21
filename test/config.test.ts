@@ -44,7 +44,7 @@ describe('parseConfigFile', () => {
 
   it('returns default config when file does not exist', () => {
     const config = parseConfigFile(join(tmpDir, 'nonexistent'));
-    expect(config.http.base).toBe('http://localhost');
+    expect(config.http.base).toBe('http://localhost:3000');
     // No Content-Type default — runner infers it when a body is present
     expect(config.http.headers['Content-Type']).toBeUndefined();
   });
@@ -61,14 +61,14 @@ describe('parseConfigFile', () => {
     const file = join(tmpDir, '.specdown');
     writeFileSync(file, '');
     const config = parseConfigFile(file);
-    expect(config.http.base).toBe('http://localhost');
+    expect(config.http.base).toBe('http://localhost:3000');
   });
 
   it('handles file with only comments', () => {
     const file = join(tmpDir, '.specdown');
     writeFileSync(file, '# This is a comment\n# Another comment\n');
     const config = parseConfigFile(file);
-    expect(config.http.base).toBe('http://localhost');
+    expect(config.http.base).toBe('http://localhost:3000');
   });
 });
 
@@ -179,7 +179,7 @@ describe('resolveConfig', () => {
     const emptyDir = join(tmpDir, 'empty');
     mkdirSync(emptyDir);
     const config = resolveConfig(emptyDir);
-    expect(config.http.base).toBe('http://localhost');
+    expect(config.http.base).toBe('http://localhost:3000');
   });
 
   it('handles three levels of config cascade', () => {

@@ -23,7 +23,7 @@ export interface SpecConfig {
 export function defaultConfig(): SpecConfig {
   return {
     http: {
-      base: 'http://localhost',
+      base: 'http://localhost:3000',
       // No Content-Type default: the runner infers it when a body is present (runner.ts).
       // Pre-setting it here caused GET requests to incorrectly send Content-Type: application/json.
       headers: {},
@@ -64,7 +64,8 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
 /**
  * Parse a single .specdown TOML config file.
  * Returns defaultConfig() if file doesn't exist or is empty/invalid.
- * When used standalone (not in cascade), fills in defaults.
+ * Partial configs (e.g. headers-only, timeout-only) are merged with defaults
+ * so that a root .specdown without a base URL still preserves its headers/timeout.
  */
 export function parseConfigFile(filePath: string): SpecConfig {
   if (!existsSync(filePath)) {
@@ -74,17 +75,12 @@ export function parseConfigFile(filePath: string): SpecConfig {
   const content = readFileSync(filePath, 'utf-8');
   const partial = parseTomlConfig(content);
 
-  if (!partial.http || !partial.http.base) {
+  if (!partial.http) {
     return defaultConfig();
   }
 
-  return {
-    http: {
-      base: partial.http.base,
-      headers: partial.http.headers || {},
-      timeout: partial.http.timeout,
-    },
-  };
+  // Merge with defaults: partial config overrides only what it sets.
+  return mergeConfigs(defaultConfig(), partial);
 }
 
 /**

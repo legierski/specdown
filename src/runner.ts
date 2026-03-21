@@ -8,6 +8,7 @@
 import { parseMarkdownSpec, type Test } from './parser.js';
 import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
+import { analyzeVarChain } from './analyze.js';
 import type { SpecConfig } from './config.js';
 
 export interface FailedStepContext {
@@ -51,6 +52,7 @@ export interface SpecResult {
  */
 export async function runSpec(markdown: string, config: SpecConfig, filter?: string | null): Promise<SpecResult> {
   const { tests, warnings: parseWarnings } = parseMarkdownSpec(markdown);
+  const chainWarnings = analyzeVarChain(tests);
   const results: TestResult[] = [];
   const specStart = Date.now();
   let skipped = 0;
@@ -88,8 +90,10 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
         ({ stepIndex, stepCount: test.steps.length, method: step.method, path, status, actualBody: body });
 
       // Substitute variables in request body
+      // Use !== null (not if(step.body)) so falsey JSON values like false, 0, "" are included.
+      // null is the sentinel for "no body block in spec".
       let bodyStr: string | undefined;
-      if (step.body) {
+      if (step.body !== null && step.body !== undefined) {
         bodyStr = substituteVars(JSON.stringify(step.body), vars);
       }
 
@@ -165,7 +169,9 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
         }
 
         // Check response body if expected — signal still armed, covers slow body delivery
-        if (step.response) {
+        // Use !== null so falsey JSON values like false, 0, "" are checked.
+        // null is the sentinel for "no expected body in spec".
+        if (step.response !== null && step.response !== undefined) {
           let actual: any;
           try {
             actual = await res.json();
@@ -217,6 +223,6 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
     failed: results.filter(t => !t.passed).length,
     skipped,
     duration: Date.now() - specStart,
-    warnings: parseWarnings,
+    warnings: [...parseWarnings, ...chainWarnings],
   };
 }
