@@ -100,10 +100,10 @@ export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): Sp
     },
   };
 
-  // Merge headers: child overrides parent, "none" removes
+  // Merge headers: child overrides parent, empty string removes
   if (child.http?.headers) {
     for (const [key, value] of Object.entries(child.http.headers)) {
-      if (value === 'none') {
+      if (value === '') {
         delete merged.http.headers[key];
       } else {
         merged.http.headers[key] = value;

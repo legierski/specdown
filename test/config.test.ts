@@ -99,15 +99,28 @@ describe('mergeConfigs', () => {
     expect(merged.http.headers['Authorization']).toBe('Bearer child');
   });
 
-  it('removes header when child sets it to "none"', () => {
+  it('removes header when child sets it to empty string', () => {
+    // Empty string is the removal sentinel — consistent with step headers
     const parent: SpecConfig = {
       http: { base: 'http://localhost', headers: { 'Authorization': 'Bearer token' } },
     };
     const child: Partial<SpecConfig> = {
-      http: { base: 'http://localhost', headers: { 'Authorization': 'none' } },
+      http: { base: 'http://localhost', headers: { 'Authorization': '' } },
     };
     const merged = mergeConfigs(parent, child);
     expect(merged.http.headers['Authorization']).toBeUndefined();
+  });
+
+  it('does NOT treat "none" as a removal sentinel in config cascade', () => {
+    // "none" is a literal value now — consistent with step headers
+    const parent: SpecConfig = {
+      http: { base: 'http://localhost', headers: {} },
+    };
+    const child: Partial<SpecConfig> = {
+      http: { base: 'http://localhost', headers: { 'X-Mode': 'none' } },
+    };
+    const merged = mergeConfigs(parent, child);
+    expect(merged.http.headers['X-Mode']).toBe('none');
   });
 
   it('preserves parent timeout when child does not set it', () => {
@@ -177,15 +190,15 @@ describe('resolveConfig', () => {
     mkdirSync(l2);
     writeFileSync(join(l2, '.specdown'), `[http.headers]\nAuthorization = "Bearer l2"\n`);
 
-    // Level 3
+    // Level 3 — empty string removes inherited header
     const l3 = join(l2, 'l3');
     mkdirSync(l3);
-    writeFileSync(join(l3, '.specdown'), `[http.headers]\nAuthorization = "none"\n`);
+    writeFileSync(join(l3, '.specdown'), `[http.headers]\nAuthorization = ""\n`);
 
     const config = resolveConfig(l3);
     expect(config.http.base).toBe('https://root.api.com');
     expect(config.http.timeout).toBe(5000);
-    expect(config.http.headers['Authorization']).toBeUndefined(); // removed by "none"
+    expect(config.http.headers['Authorization']).toBeUndefined(); // removed by empty string
     expect(config.http.headers['Content-Type']).toBe('application/json');
     expect(config.http.headers['X-Custom']).toBe('root-value');
   });

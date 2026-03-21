@@ -99,12 +99,13 @@ describe('mergeConfigs edge cases', () => {
     expect(merged.http.timeout).toBe(5000);
   });
 
-  it('removes multiple headers with "none"', () => {
+  it('removes multiple headers with empty string', () => {
+    // Empty string removes inherited headers — consistent with step headers
     const parent: SpecConfig = {
       http: { base: 'http://localhost', headers: { 'A': '1', 'B': '2', 'C': '3' } },
     };
     const child: Partial<SpecConfig> = {
-      http: { base: '', headers: { 'A': 'none', 'C': 'none' } },
+      http: { base: '', headers: { 'A': '', 'C': '' } },
     };
     const merged = mergeConfigs(parent, child);
     expect(merged.http.headers['A']).toBeUndefined();
