@@ -129,7 +129,9 @@ export function matchResponse(
 
       // Pattern matching
       if (!matchesPattern(val, actual[key])) {
-        errors.push(`Field "${fieldPath}": "${actual[key]}" does not match "${val}"`);
+        // Use JSON.stringify for actual so types are visually distinct:
+        // number 42 → 42, string "42" → "42", null → null, bool → true/false
+        errors.push(`Field "${fieldPath}": ${JSON.stringify(actual[key])} does not match "${val}"`);
       }
     } else if (typeof val === 'object' && val !== null) {
       // Recursive partial matching for nested objects and arrays

@@ -238,3 +238,46 @@ describe('substituteVars edge cases', () => {
     expect(substituteVars('$a', { a: '$b', b: 'nope' })).toBe('$b');
   });
 });
+
+// ──────────────────────────────────────
+// Type mismatch error message clarity
+// ──────────────────────────────────────
+
+describe('matchResponse — type mismatch error messages', () => {
+  it('number actual vs string expected shows raw JSON (not string-coerced)', () => {
+    const errors = matchResponse({ id: 42 }, { id: '42' }, {}, {});
+    expect(errors).toHaveLength(1);
+    // "42" (no quotes) vs "42" (with quotes) — visually distinct
+    expect(errors[0]).toMatch(/42[^"]/);   // actual: bare 42
+    expect(errors[0]).toMatch(/"42"/);     // expected: quoted "42"
+  });
+
+  it('null actual vs string "null" expected shows raw JSON', () => {
+    const errors = matchResponse({ value: null }, { value: 'null' }, {}, {});
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/\bnull\b/);   // bare null
+    expect(errors[0]).toMatch(/"null"/);     // quoted "null"
+  });
+
+  it('boolean true actual vs string "true" expected shows raw JSON', () => {
+    const errors = matchResponse({ flag: true }, { flag: 'true' }, {}, {});
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/\btrue\b/);   // bare true
+    expect(errors[0]).toMatch(/"true"/);     // quoted "true"
+  });
+
+  it('boolean false actual vs string "false" expected shows raw JSON', () => {
+    const errors = matchResponse({ flag: false }, { flag: 'false' }, {}, {});
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/\bfalse\b/);  // bare false
+    expect(errors[0]).toMatch(/"false"/);    // quoted "false"
+  });
+
+  it('string actual vs number expected shows raw JSON', () => {
+    const errors = matchResponse({ count: '5' }, { count: 5 }, {}, {});
+    expect(errors).toHaveLength(1);
+    // actual: "5" (quoted), expected: 5 (bare)
+    expect(errors[0]).toMatch(/"5"/);        // actual: quoted "5"
+    expect(errors[0]).toMatch(/\b5\b/);      // expected: bare 5
+  });
+});
