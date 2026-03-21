@@ -7,6 +7,7 @@
 
 import { parseMarkdownSpec, type Test } from './parser.js';
 import { matchResponse, substituteVars } from './matcher.js';
+import { matchesPattern } from './pattern.js';
 import type { SpecConfig } from './config.js';
 
 export interface TestResult {
@@ -103,6 +104,30 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
         if (res.status !== step.status) {
           errors.push(`Expected status ${step.status}, got ${res.status}`);
           break; // Stop chain on status mismatch
+        }
+
+        // Check response headers if asserted
+        if (step.responseHeaders && Object.keys(step.responseHeaders).length > 0) {
+          // Build a lowercase-keyed map of actual response headers for case-insensitive lookup
+          const actualHeaders: Record<string, string> = {};
+          res.headers.forEach((value, name) => {
+            actualHeaders[name.toLowerCase()] = value;
+          });
+
+          for (const [assertedName, assertedValue] of Object.entries(step.responseHeaders)) {
+            const actual = actualHeaders[assertedName.toLowerCase()];
+            if (actual === undefined) {
+              errors.push(`Response header missing: ${assertedName}`);
+              break;
+            }
+            if (!matchesPattern(assertedValue, actual)) {
+              errors.push(
+                `Response header mismatch: ${assertedName}\n  expected: ${assertedValue}\n  actual:   ${actual}`
+              );
+              break;
+            }
+          }
+          if (errors.length > 0) break;
         }
 
         // Check response body if expected

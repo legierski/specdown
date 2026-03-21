@@ -15,6 +15,7 @@ export interface Step {
   body: any;
   bodyAnnotations: Record<string, string>;
   status: number;
+  responseHeaders: Record<string, string>;
   response: any;
   responseAnnotations: Record<string, string>;
 }
@@ -157,16 +158,41 @@ export function parseMarkdownSpec(raw: string): Test[] {
         const status = parseInt(statusMatch[1]);
         idx++;
 
-        // Look for response body (optional)
+        // Look for optional **Response Headers** block, then optional response body
+        let responseHeaders: Record<string, string> = {};
         let response = null;
         let responseAnnotations: Record<string, string> = {};
+
+        // Scan forward: skip blank lines / prose until we hit something recognizable
         while (
           idx < lines.length &&
           !lines[idx].includes('```json') &&
           !lines[idx].includes('**Request**') &&
-          !lines[idx].includes('**Headers**')
+          !lines[idx].includes('**Headers**') &&
+          !lines[idx].includes('**Response Headers**')
         ) {
           idx++;
+        }
+
+        // Optional response headers block
+        if (idx < lines.length && lines[idx].includes('**Response Headers**')) {
+          idx++;
+          // skip to the opening ```http (or ```)
+          while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
+          if (idx < lines.length) {
+            const result = extractHeadersBlock(lines, idx);
+            responseHeaders = result.headers;
+            idx = result.endIdx;
+          }
+          // Now scan for response body
+          while (
+            idx < lines.length &&
+            !lines[idx].includes('```json') &&
+            !lines[idx].includes('**Request**') &&
+            !lines[idx].includes('**Headers**')
+          ) {
+            idx++;
+          }
         }
 
         if (idx < lines.length && lines[idx].includes('```json')) {
@@ -185,6 +211,7 @@ export function parseMarkdownSpec(raw: string): Test[] {
           body,
           bodyAnnotations,
           status,
+          responseHeaders,
           response,
           responseAnnotations,
         });
