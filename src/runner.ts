@@ -59,12 +59,30 @@ export async function runSpec(markdown: string, config: SpecConfig): Promise<Spe
 
         // Execute request
         const url = `${config.http.base}${path}`;
-        const res = await fetch(url, {
-          method: step.method,
-          headers,
-          body: bodyStr,
-          redirect: 'manual',
-        });
+        const timeout = config.http.timeout;
+        let abortTimer: ReturnType<typeof setTimeout> | undefined;
+        const controller = new AbortController();
+        if (timeout !== undefined && timeout > 0) {
+          abortTimer = setTimeout(() => controller.abort(), timeout);
+        }
+
+        let res: Response;
+        try {
+          res = await fetch(url, {
+            method: step.method,
+            headers,
+            body: bodyStr,
+            redirect: 'manual',
+            signal: controller.signal,
+          });
+        } finally {
+          if (abortTimer !== undefined) clearTimeout(abortTimer);
+        }
+
+        if (controller.signal.aborted) {
+          errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+          break;
+        }
 
         // Check status code
         if (res.status !== step.status) {

@@ -453,4 +453,52 @@ Authorization: none
     expect(result.tests[0].duration).toBeGreaterThan(0);
     expect(result.duration).toBeGreaterThan(0);
   });
+
+  it('times out when timeout is exceeded', async () => {
+    // /v1/slow takes 100ms — set timeout to 50ms to force abort
+    const md = `# API
+
+## Timeout test
+
+**Request** → \`GET /v1/slow\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"ok": true}
+\`\`\`
+`;
+    const result = await runSpec(md, {
+      http: {
+        base: `http://localhost:${port}`,
+        headers: {},
+        timeout: 50, // 50ms, server waits 100ms
+      },
+    });
+    expect(result.failed).toBe(1);
+    expect(result.tests[0].errors[0]).toMatch(/timeout|abort|timed out/i);
+  }, 2000);
+
+  it('does not time out when timeout is large enough', async () => {
+    const md = `# API
+
+## No timeout
+
+**Request** → \`GET /v1/slow\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"ok": true}
+\`\`\`
+`;
+    const result = await runSpec(md, {
+      http: {
+        base: `http://localhost:${port}`,
+        headers: {},
+        timeout: 5000, // plenty of time
+      },
+    });
+    expect(result.passed).toBe(1);
+  }, 3000);
 });
