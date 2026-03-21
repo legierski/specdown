@@ -41,4 +41,16 @@ describe('execCommand', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
   });
+
+  it('uses custom shell when provided', () => {
+    // Pass /bin/sh as shell — should work the same for echo
+    const result = execCommand('echo shell-test', undefined, '/bin/sh');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('shell-test');
+  });
+
+  it('rejects invalid shell path', () => {
+    const result = execCommand('echo hello', undefined, '/nonexistent/shell');
+    expect(result.exitCode).not.toBe(0);
+  });
 });

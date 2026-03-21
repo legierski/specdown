@@ -2,6 +2,22 @@
 
 All notable changes to specdown.
 
+## 0.9.2
+
+**Security release.** Six fixes from Kai's security review and Gemma's audit.
+
+### Security
+
+1. **SQL shell injection via database path** — `execSync` with string interpolation in `sql.ts` allowed shell metacharacters in the database path to execute arbitrary commands. Replaced both call sites with `execFileSync`, which bypasses shell interpretation entirely.
+2. **Assertion-less steps execute without guard** — A `**Run**` without `**Output**` or `**Query**` without `**Result**` would execute the command/query and report green with no assertions. Parser now skips these steps with a warning, aligned with HTTP mode's existing behavior for missing `**Response**`.
+
+### Bug fixes
+
+3. **CLI timeout used HTTP config** — `runner.ts` used `config.http.timeout` for CLI steps. Now uses `config.cli?.timeout ?? config.http.timeout`.
+4. **`cli.shell` not wired** — Config supported `cli.shell` but `exec.ts` ignored it. `execCommand` now accepts an optional `shell` parameter, passed through by the runner.
+5. **SQL has no timeout** — `execFileSync` in `sql.ts` had no timeout. Added `timeout` parameter, wired from `config.sql?.timeout ?? config.http.timeout`. New `sql.timeout` field in SpecConfig and TOML parsing.
+6. **Invalid TOML silently swallowed** — `parseTomlConfig` caught parse errors and returned `{}`. Now returns a warning with the parse error message, propagated through `resolveConfig` → `SpecResult.warnings`.
+
 ## 0.9.1
 
 Config infrastructure. Three changes aligned with Peter's design docs:

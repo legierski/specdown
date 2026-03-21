@@ -21,7 +21,10 @@ export interface SpecConfig {
   };
   sql?: {
     connection: string;
+    timeout?: number;
   };
+  /** Config-level warnings (e.g. invalid TOML). Propagated to SpecResult. */
+  warnings?: string[];
 }
 
 /**
@@ -48,8 +51,9 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
   let parsed: any;
   try {
     parsed = TOML.parse(content);
-  } catch {
-    return {};
+  } catch (err: any) {
+    const msg = err.message ? `TOML parse error: ${err.message}` : 'TOML parse error in .specdown config';
+    return { warnings: [msg] };
   }
 
   if (!parsed.http && !parsed.cli && !parsed.sql) return {};
@@ -72,8 +76,11 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
     if (parsed.cli.timeout !== undefined) result.cli.timeout = parsed.cli.timeout;
   }
 
-  if (parsed.sql?.connection) {
-    result.sql = { connection: parsed.sql.connection };
+  if (parsed.sql) {
+    if (parsed.sql.connection) {
+      result.sql = { connection: parsed.sql.connection };
+      if (parsed.sql.timeout !== undefined) result.sql.timeout = parsed.sql.timeout;
+    }
   }
 
   return result;
@@ -92,6 +99,13 @@ export function parseConfigFile(filePath: string): SpecConfig {
 
   const content = readFileSync(filePath, 'utf-8');
   const partial = parseTomlConfig(content);
+
+  // If TOML had parse errors, return defaults with warnings attached
+  if (partial.warnings && partial.warnings.length > 0) {
+    const config = defaultConfig();
+    config.warnings = partial.warnings;
+    return config;
+  }
 
   if (!partial.http && !partial.cli && !partial.sql) {
     return defaultConfig();
@@ -133,11 +147,12 @@ export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): Sp
     };
   }
 
-  // Merge sql: child overrides parent
-  if (child.sql?.connection) {
-    merged.sql = { connection: child.sql.connection };
-  } else if (parent.sql) {
-    merged.sql = { ...parent.sql };
+  // Merge sql: child overrides parent per-field
+  if (child.sql || parent.sql) {
+    merged.sql = {
+      connection: child.sql?.connection ?? parent.sql?.connection ?? '',
+      timeout: child.sql?.timeout ?? parent.sql?.timeout,
+    };
   }
 
   return merged;
@@ -171,14 +186,20 @@ export function resolveConfig(dir: string): SpecConfig {
   // Parse root as full config (with defaults for missing fields)
   let config = parseConfigFile(configFiles[0]);
 
+  // Collect all warnings from config files
+  const allWarnings: string[] = [...(config.warnings ?? [])];
+
   // Merge subsequent configs as partials (only override what they set)
   for (let i = 1; i < configFiles.length; i++) {
     const content = readFileSync(configFiles[i], 'utf-8');
     const partial = parseTomlConfig(content);
-    if (partial.http || partial.cli || partial.sql) {
+    if (partial.warnings) {
+      allWarnings.push(...partial.warnings);
+    } else if (partial.http || partial.cli || partial.sql) {
       config = mergeConfigs(config, partial);
     }
   }
 
+  if (allWarnings.length > 0) config.warnings = allWarnings;
   return config;
 }

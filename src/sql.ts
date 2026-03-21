@@ -6,7 +6,7 @@
  * and affected row count for write operations.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 export interface SqlResult {
   rows: any[];
@@ -24,16 +24,19 @@ export interface SqlResult {
  * @param query - SQL query to execute
  * @param type - 'rows' for SELECT (uses -json), 'affected' for INSERT/UPDATE/DELETE
  */
-export function execSql(database: string, query: string, type: 'rows' | 'affected' | null): SqlResult {
+export function execSql(database: string, query: string, type: 'rows' | 'affected' | null, timeout?: number): SqlResult {
   const isWrite = type === 'affected';
+
+  const timeoutOpt = timeout && timeout > 0 ? timeout : undefined;
 
   try {
     if (isWrite) {
       // For write ops: execute query, then SELECT changes()
       const fullQuery = `${query};\nSELECT changes() as affected;`;
-      const stdout = execSync(`sqlite3 -json "${database}"`, {
+      const stdout = execFileSync('sqlite3', ['-json', database], {
         input: fullQuery,
         encoding: 'utf-8',
+        timeout: timeoutOpt,
         stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
 
@@ -51,9 +54,10 @@ export function execSql(database: string, query: string, type: 'rows' | 'affecte
       return { rows: [], changes, error: null };
     } else {
       // For SELECT: use -json mode
-      const stdout = execSync(`sqlite3 -json "${database}"`, {
+      const stdout = execFileSync('sqlite3', ['-json', database], {
         input: query,
         encoding: 'utf-8',
+        timeout: timeoutOpt,
         stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
 
@@ -63,6 +67,9 @@ export function execSql(database: string, query: string, type: 'rows' | 'affecte
       return { rows: Array.isArray(rows) ? rows : [rows], changes: 0, error: null };
     }
   } catch (err: any) {
+    if (err.killed || err.signal === 'SIGTERM') {
+      return { rows: [], changes: 0, error: `Query timed out after ${timeout}ms` };
+    }
     const stderr = (err.stderr ?? '').trim();
     const msg = stderr || err.message || 'sqlite3 query failed';
     return { rows: [], changes: 0, error: msg };

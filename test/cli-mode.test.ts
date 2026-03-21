@@ -136,6 +136,51 @@ no arrows
 });
 
 // ──────────────────────────────────────
+// Parser: missing assertion keyword = skip + warn
+// ──────────────────────────────────────
+
+describe('parser — CLI mode missing Output', () => {
+  it('warns and skips Run step with no Output keyword', () => {
+    const md = `# CLI Tests
+
+## Dangerous command
+
+**Run** → \`rm -rf /tmp/specdown-test-dir\`
+`;
+    const { tests, warnings } = parseMarkdownSpec(md);
+    // Should NOT produce a test — step skipped, so no steps, so no test entry
+    expect(tests).toHaveLength(0);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some(w => w.includes('Output'))).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────
+// Runner: CLI timeout uses cli config
+// ──────────────────────────────────────
+
+describe('runner — CLI timeout config', () => {
+  it('uses cli.timeout instead of http.timeout', async () => {
+    const md = `# CLI Tests
+
+## Slow command
+
+**Run** → \`sleep 5\`
+
+**Output** → \`🟢 exit 0\`
+`;
+    // cli.timeout = 100ms should kill it fast, http.timeout = 30000ms should not
+    const cfg: SpecConfig = {
+      http: { base: 'http://localhost:1', headers: {}, timeout: 30000 },
+      cli: { timeout: 100 },
+    };
+    const result = await runSpec(md, cfg);
+    expect(result.failed).toBe(1);
+    expect(result.tests[0].errors[0]).toContain('timed out');
+  });
+});
+
+// ──────────────────────────────────────
 // Runner: executing CLI steps
 // ──────────────────────────────────────
 

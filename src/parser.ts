@@ -95,8 +95,12 @@ export function parseMarkdownSpec(raw: string): ParseResult {
           continue;
         }
 
-        // Find Result line
+        // Find Result line — skip step if missing (don't execute without assertions)
         while (idx < lines.length && !lines[idx].includes('**Result**')) idx++;
+        if (idx >= lines.length) {
+          warnings.push(`"${name}" — Query has no Result line (step skipped)`);
+          continue;
+        }
 
         let expectedRows: number | null = null;
         let expectedType: 'rows' | 'affected' | null = null;
@@ -174,8 +178,12 @@ export function parseMarkdownSpec(raw: string): ParseResult {
           continue;
         }
 
-        // Find Output line
+        // Find Output line — skip step if missing (don't execute without assertions)
         while (idx < lines.length && !lines[idx].includes('**Output**')) idx++;
+        if (idx >= lines.length) {
+          warnings.push(`"${name}" — Run has no Output line (step skipped)`);
+          continue;
+        }
 
         let expectedExit: number | null = null;
         let expectedOutput: any = null;

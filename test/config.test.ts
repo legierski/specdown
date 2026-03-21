@@ -261,3 +261,15 @@ describe('resolveConfig', () => {
     expect(config.http.headers['X-Custom']).toBe('root-value');
   });
 });
+
+describe('parseConfigFile — TOML parse warnings', () => {
+  it('returns warnings for invalid TOML', () => {
+    const configPath = join(tmpDir, '.specdown');
+    writeFileSync(configPath, '[http\nbase = "broken toml');
+    const result = parseConfigFile(configPath);
+    // Currently silently falls back to defaults — should emit warnings
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings!.length).toBeGreaterThan(0);
+    expect(result.warnings![0]).toContain('TOML');
+  });
+});

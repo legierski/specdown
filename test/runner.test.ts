@@ -1,11 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { execSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { runSpec } from '../src/runner.js';
 import type { SpecConfig } from '../src/config.js';
 
 // Simple test server that echoes back what we need
 let server: Server;
 let port: number;
+let collisionTmpDir: string;
+let collisionDbPath: string;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -88,6 +94,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   server.close();
+  if (collisionTmpDir) rmSync(collisionTmpDir, { recursive: true, force: true });
 });
 
 function config(): SpecConfig {
@@ -295,5 +302,55 @@ Authorization:
     const results = await runSpec(md, config());
     expect(results.failed).toBe(1);
     expect(results.tests[0].errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('mode collision — SQL + HTTP in same spec', () => {
+  beforeAll(() => {
+    collisionTmpDir = mkdtempSync(join(tmpdir(), 'specdown-collision-'));
+    collisionDbPath = join(collisionTmpDir, 'test.db');
+    execSync(`sqlite3 "${collisionDbPath}" "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO items (name) VALUES ('alpha');"`);
+  });
+
+  it('HTTP headers do not leak into SQL execution', async () => {
+    // A spec with HTTP and SQL tests in the same file — config has both
+    // HTTP headers and SQL connection. Each mode should use its own config.
+    const md = `# Mixed mode
+
+## HTTP test
+
+**Request** → \`GET /v1/users/user1\`
+
+**Response** → \`🟢 200\`
+
+\`\`\`json
+{
+  "id": "user1",
+  "name": "Sarah"
+}
+\`\`\`
+
+## SQL test
+
+**Query** → \`SELECT name FROM items WHERE id = 1\`
+
+**Result** → \`1 row\`
+
+\`\`\`json
+{
+  "name": "alpha"
+}
+\`\`\`
+`;
+    const cfg: SpecConfig = {
+      http: {
+        base: `http://localhost:${port}`,
+        headers: { 'Authorization': 'Bearer secret', 'Content-Type': 'application/json' },
+      },
+      sql: { connection: collisionDbPath },
+    };
+    const result = await runSpec(md, cfg);
+    expect(result.passed).toBe(2);
+    expect(result.failed).toBe(0);
   });
 });

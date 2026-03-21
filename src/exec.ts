@@ -18,14 +18,16 @@ export interface ExecResult {
  *
  * @param command - Shell command to run
  * @param timeout - Timeout in ms (0 or undefined = no timeout)
+ * @param shell - Shell executable to use (e.g. '/bin/bash'). Defaults to system shell.
  * @returns stdout, stderr, and exit code
  */
-export function execCommand(command: string, timeout?: number): ExecResult {
+export function execCommand(command: string, timeout?: number, shell?: string): ExecResult {
   try {
     const stdout = execSync(command, {
       encoding: 'utf-8',
       timeout: timeout && timeout > 0 ? timeout : undefined,
       stdio: ['pipe', 'pipe', 'pipe'],
+      ...(shell ? { shell } : {}),
     });
     return { stdout: stdout.trimEnd(), stderr: '', exitCode: 0 };
   } catch (err: any) {

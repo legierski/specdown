@@ -151,6 +151,26 @@ GROUP BY u.name
 });
 
 // ──────────────────────────────────────
+// Parser: missing Result keyword = skip + warn
+// ──────────────────────────────────────
+
+describe('parser — SQL mode missing Result', () => {
+  it('warns and skips Query step with no Result keyword', () => {
+    const md = `# SQL Tests
+
+## Dangerous query
+
+**Query** → \`DROP TABLE users\`
+`;
+    const { tests, warnings } = parseMarkdownSpec(md);
+    // Should NOT produce a test — step skipped, so no steps, so no test entry
+    expect(tests).toHaveLength(0);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some(w => w.includes('Result'))).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────
 // Runner: executing SQL steps
 // ──────────────────────────────────────
 

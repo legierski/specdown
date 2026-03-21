@@ -199,8 +199,9 @@ async function executeCliStep(
   const makeFailedStep = (body: any = null): FailedStepContext =>
     ({ stepIndex, stepCount, mode: 'cli', method: 'RUN', path: command, status: 0, actualBody: body });
 
-  const timeout = config.http.timeout;
-  const result = execCommand(command, timeout);
+  const timeout = config.cli?.timeout ?? config.http.timeout;
+  const shell = config.cli?.shell;
+  const result = execCommand(command, timeout, shell);
 
   // Check for timeout
   if (result.exitCode === -1) {
@@ -266,7 +267,8 @@ async function executeSqlStep(
     return { errors, failedStep: makeFailedStep() };
   }
 
-  const result = execSql(config.sql.connection, query, step.expectedType);
+  const timeout = config.sql?.timeout ?? config.http.timeout;
+  const result = execSql(config.sql.connection, query, step.expectedType, timeout);
 
   if (result.error) {
     errors.push(`SQL error: ${result.error}`);
@@ -366,6 +368,6 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
     failed: results.filter(t => !t.passed).length,
     skipped,
     duration: Date.now() - specStart,
-    warnings: [...parseWarnings, ...chainWarnings],
+    warnings: [...(config.warnings ?? []), ...parseWarnings, ...chainWarnings],
   };
 }

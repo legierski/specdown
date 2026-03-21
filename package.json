@@ -1,6 +1,6 @@
 {
   "name": "specdown",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Documentation that tests itself. Write specs in markdown, run them as tests.",
   "type": "module",
   "main": "dist/index.js",
