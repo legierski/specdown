@@ -57,6 +57,16 @@ export function matchResponse(
     return errors;
   }
 
+  // Guard: if expected is a primitive (number, string, boolean, null) — direct compare.
+  // Object.entries(null) throws; Object.entries(1) returns [] causing silent false positives.
+  if (expected === null || typeof expected !== 'object') {
+    if (actual !== expected) {
+      const label = _path || 'value';
+      errors.push(`${label}: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
+    }
+    return errors;
+  }
+
   for (const [key, val] of Object.entries(expected)) {
     const fieldPath = `${prefix}${key}`;
     const annotation = annotations[key];
@@ -67,14 +77,14 @@ export function matchResponse(
       continue;
     }
 
-    // Handle "save as: $var"
+    // Handle "save as: $var" — validate the expected value first, then save on match
     const saveMatch = annotation?.match(/^save as:\s*\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
     if (saveMatch) {
-      // Still validate pattern if applicable
-      if (typeof val === 'string' && (/x{2,}/.test(val) || /0{2,}/.test(val))) {
-        if (!toPattern(val).test(actual[key])) {
-          errors.push(`Field "${fieldPath}": "${actual[key]}" does not match pattern "${val}"`);
-          continue;
+      if (typeof val === 'string') {
+        // Validate via matchesPattern (handles patterns, literals, email, any-*)
+        if (!matchesPattern(val, actual[key])) {
+          errors.push(`Field "${fieldPath}": ${JSON.stringify(actual[key])} does not match "${val}"`);
+          continue; // don't save on mismatch
         }
       }
       vars[saveMatch[1]] = actual[key];
@@ -83,7 +93,13 @@ export function matchResponse(
 
     // Handle "not: $var"
     const notMatch = annotation?.match(/^not:\s+\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
-    if (notMatch && vars[notMatch[1]] !== undefined) {
+    if (notMatch) {
+      const notVarName = notMatch[1];
+      if (vars[notVarName] === undefined) {
+        // Typo or missing save — fail explicitly rather than silently skip the check
+        errors.push(`Field "${fieldPath}": 'not:' annotation references undefined variable $${notVarName}`);
+        continue;
+      }
       // Validate pattern first
       if (typeof val === 'string' && (/x{2,}/.test(val) || /0{2,}/.test(val))) {
         if (!toPattern(val).test(actual[key])) {
@@ -91,8 +107,8 @@ export function matchResponse(
           continue;
         }
       }
-      if (actual[key] === vars[notMatch[1]]) {
-        errors.push(`Field "${fieldPath}": expected NOT to equal "${vars[notMatch[1]]}" but did`);
+      if (actual[key] === vars[notVarName]) {
+        errors.push(`Field "${fieldPath}": expected NOT to equal "${vars[notVarName]}" but did`);
       }
       continue;
     }

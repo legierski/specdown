@@ -243,6 +243,96 @@ describe('substituteVars edge cases', () => {
 // Type mismatch error message clarity
 // ──────────────────────────────────────
 
+// ──────────────────────────────────────
+// BUG: save as: annotation skips exact value validation
+// If expected is "active" with save as: $s, and actual is "deleted",
+// it saves "deleted" without checking the expected value — false positive.
+// ──────────────────────────────────────
+
+describe('matchResponse — save as: should validate then save', () => {
+  it('save as: with literal expected should fail when actual differs', () => {
+    const vars: Record<string, string> = {};
+    const errors = matchResponse(
+      { status: 'deleted' },
+      { status: 'active' },
+      { status: 'save as: $status' },
+      vars
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/status/);
+    // Should NOT save the wrong value
+    expect(vars.status).toBeUndefined();
+  });
+
+  it('save as: with matching literal should save and pass', () => {
+    const vars: Record<string, string> = {};
+    const errors = matchResponse(
+      { status: 'active' },
+      { status: 'active' },
+      { status: 'save as: $status' },
+      vars
+    );
+    expect(errors).toHaveLength(0);
+    expect(vars.status).toBe('active');
+  });
+
+  it('save as: with pattern match failure should not save', () => {
+    const vars: Record<string, string> = {};
+    const errors = matchResponse(
+      { id: 'short' },
+      { id: 'usr_xxxxxxxxxxxx' },
+      { id: 'save as: $uid' },
+      vars
+    );
+    expect(errors).toHaveLength(1);
+    expect(vars.uid).toBeUndefined();
+  });
+});
+
+// ──────────────────────────────────────
+// BUG: not: with missing variable silently skips annotation
+// If $old_token doesn't exist in vars, the not: check is ignored entirely.
+// Typo in variable name = silent false positive.
+// ──────────────────────────────────────
+
+describe('matchResponse — not: annotation with missing variable', () => {
+  it('not: referencing a variable not in vars should error', () => {
+    const vars: Record<string, string> = {}; // $old_token not set
+    const errors = matchResponse(
+      { token: 'abc123' },
+      { token: 'xxxxxx' },
+      { token: 'not: $old_token' },
+      vars
+    );
+    // Should fail: the referenced variable doesn't exist, so annotation can't be evaluated
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/old_token/);
+  });
+
+  it('not: referencing a present variable still works', () => {
+    const vars = { old_token: 'aaa111' };
+    const errors = matchResponse(
+      { token: 'bbb222' },
+      { token: 'xxxxxx' },
+      { token: 'not: $old_token' },
+      vars
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it('not: with present variable that matches actual should fail', () => {
+    const vars = { old_token: 'same_value' };
+    const errors = matchResponse(
+      { token: 'same_value' },
+      { token: 'xxxxxxxxxx' },
+      { token: 'not: $old_token' },
+      vars
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/NOT/i);
+  });
+});
+
 describe('matchResponse — type mismatch error messages', () => {
   it('number actual vs string expected shows raw JSON (not string-coerced)', () => {
     const errors = matchResponse({ id: 42 }, { id: '42' }, {}, {});
