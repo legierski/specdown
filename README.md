@@ -122,7 +122,47 @@ A spec file is a markdown file with `## H2` headings as test cases. Each test ca
 
 **Variable capture:** `"id": "usr_xxxxxxxxxxxx",  // save as: $user_id` captures the value for use in later steps.
 
-**Variable substitution:** `$user_id` in paths and request bodies is replaced with the captured value.
+**Variable substitution:** `$user_id` in paths, request bodies, and headers is replaced with the captured value.
+
+### Negative assertions (`not:`)
+
+Use `// not: $var` to assert a field does NOT equal a previously saved value. The pattern must still match, but the actual value must differ:
+
+````markdown
+## Create two users with different IDs
+
+**Request** → `POST /v1/users`
+
+```json
+{"name": "Alice"}
+```
+
+**Response** → `🟢 201 Created`
+
+```json
+{
+  "id": "usr_xxxxxxxxxxxx",  // save as: $first_id
+  "name": "Alice"
+}
+```
+
+**Request** → `POST /v1/users`
+
+```json
+{"name": "Bob"}
+```
+
+**Response** → `🟢 201 Created`
+
+```json
+{
+  "id": "usr_xxxxxxxxxxxx",  // not: $first_id
+  "name": "Bob"
+}
+```
+````
+
+This verifies that each user gets a unique ID — the second `id` must match the `usr_xxxxxxxxxxxx` pattern but must not equal the first user's ID. If `$first_id` is undefined, the test fails explicitly.
 
 ### Response header assertions
 
