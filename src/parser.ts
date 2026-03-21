@@ -240,6 +240,7 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
       base = line.slice('base:'.length).trim();
       i++;
     } else if (line.startsWith('timeout:')) {
+      // parseInt intentionally truncates floats (99.5 → 99); this is fine for ms values
       const val = parseInt(line.slice('timeout:'.length).trim(), 10);
       if (!isNaN(val)) timeout = val;
       i++;
@@ -265,6 +266,13 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
         i++;
       }
     } else {
+      // Unknown top-level key — warn so typos like "base_url" don't silently do nothing
+      const key = line.split(':')[0].trim();
+      if (key && !line.startsWith(' ') && !line.startsWith('\t')) {
+        process.stderr.write(
+          `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers)\n`
+        );
+      }
       i++;
     }
   }

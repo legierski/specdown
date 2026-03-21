@@ -72,6 +72,12 @@ describe('parseFrontmatter', () => {
     expect(parseFrontmatter(md)).toBeNull();
   });
 
+  it('parses header value containing colons inside quotes', () => {
+    const md = `---\nheaders:\n  Authorization: "Bearer: token:v2"\n---\n\n# API\n`;
+    const fm = parseFrontmatter(md);
+    expect(fm!.http?.headers?.['Authorization']).toBe('Bearer: token:v2');
+  });
+
   it('handles frontmatter with only base', () => {
     const md = `---\nbase: http://staging.example.com\n---\n`;
     const fm = parseFrontmatter(md);
