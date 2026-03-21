@@ -22,12 +22,14 @@ export interface CliOptions {
   targets: string[];
   format: 'pretty' | 'json';
   config: SpecConfig;
+  filter: string | null;
 }
 
 export function parseArgs(args: string[]): CliOptions {
   const command = args[0] || 'run';
   const targets: string[] = [];
   let format: 'pretty' | 'json' = 'pretty';
+  let filter: string | null = null;
 
   let i = 1;
   while (i < args.length) {
@@ -36,6 +38,9 @@ export function parseArgs(args: string[]): CliOptions {
       i += 2;
     } else if (args[i] === '--base' && args[i + 1]) {
       i += 2; // handled below in config
+    } else if (args[i] === '--test' && args[i + 1]) {
+      filter = args[i + 1];
+      i += 2;
     } else if (!args[i].startsWith('-')) {
       targets.push(args[i]);
       i++;
@@ -56,7 +61,7 @@ export function parseArgs(args: string[]): CliOptions {
     },
   };
 
-  return { command, targets, format, config };
+  return { command, targets, format, config, filter };
 }
 
 export function findSpecFiles(target: string): string[] {
@@ -141,6 +146,7 @@ Try: specdown run api.spec.md  or  specdown run <directory>`);
 
   let totalPassed = 0;
   let totalFailed = 0;
+  let totalSkipped = 0;
   const jsonResults: any[] = [];
 
   for (const file of allFiles) {
@@ -158,18 +164,19 @@ Try: specdown run api.spec.md  or  specdown run <directory>`);
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
     }
 
-    const result = await runSpec(stripFrontmatter(markdown), fileConfig);
+    const result = await runSpec(stripFrontmatter(markdown), fileConfig, opts.filter);
 
     totalPassed += result.passed;
     totalFailed += result.failed;
+    totalSkipped += result.skipped;
 
     if (opts.format === 'json') {
       jsonResults.push({
         file,
         ...result,
       });
-    } else {
-      // Pretty output
+    } else if (result.tests.length > 0) {
+      // Pretty output — skip files with zero matching tests when filtering
       const relPath = file.replace(process.cwd() + '/', '');
       console.log(`\n${bold(relPath)}`);
       for (const test of result.tests) {
@@ -185,14 +192,22 @@ Try: specdown run api.spec.md  or  specdown run <directory>`);
     }
   }
 
+  // Zero-match check: if a filter was given but nothing ran, that's an error
+  if (opts.filter !== null && totalPassed === 0 && totalFailed === 0) {
+    console.error(`No tests matched filter: "${opts.filter}"`);
+    process.exit(1);
+  }
+
   if (opts.format === 'json') {
     console.log(JSON.stringify({
       files: jsonResults,
       passed: totalPassed,
       failed: totalFailed,
+      skipped: totalSkipped,
     }, null, 2));
   } else {
-    console.log(`\n${bold('Results:')} ${green(`${totalPassed} passed`)}, ${totalFailed > 0 ? red(`${totalFailed} failed`) : `${totalFailed} failed`} ${dim(`(${allFiles.length} file${allFiles.length === 1 ? '' : 's'})`)}`);
+    const skippedStr = totalSkipped > 0 ? `, ${dim(`${totalSkipped} skipped`)}` : '';
+    console.log(`\n${bold('Results:')} ${green(`${totalPassed} passed`)}, ${totalFailed > 0 ? red(`${totalFailed} failed`) : `${totalFailed} failed`}${skippedStr} ${dim(`(${allFiles.length} file${allFiles.length === 1 ? '' : 's'})`)}`);
   }
 
   process.exit(totalFailed > 0 ? 1 : 0);

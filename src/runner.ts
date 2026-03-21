@@ -20,18 +20,28 @@ export interface SpecResult {
   tests: TestResult[];
   passed: number;
   failed: number;
+  skipped: number;
   duration: number;
 }
 
 /**
  * Run all tests from a markdown spec string against a live server.
+ *
+ * @param filter - Optional case-insensitive substring filter on test names.
+ *                 null or undefined = run all tests.
  */
-export async function runSpec(markdown: string, config: SpecConfig): Promise<SpecResult> {
+export async function runSpec(markdown: string, config: SpecConfig, filter?: string | null): Promise<SpecResult> {
   const tests = parseMarkdownSpec(markdown);
   const results: TestResult[] = [];
   const specStart = Date.now();
+  let skipped = 0;
 
   for (const test of tests) {
+    // Apply filter: skip tests whose name doesn't contain the filter string
+    if (filter != null && !test.name.toLowerCase().includes(filter.toLowerCase())) {
+      skipped++;
+      continue;
+    }
     const testStart = Date.now();
     const errors: string[] = [];
     const vars: Record<string, string> = {};
@@ -128,6 +138,7 @@ export async function runSpec(markdown: string, config: SpecConfig): Promise<Spe
     tests: results,
     passed: results.filter(t => t.passed).length,
     failed: results.filter(t => !t.passed).length,
+    skipped,
     duration: Date.now() - specStart,
   };
 }
