@@ -51,9 +51,7 @@ export function parseArgs(args: string[]): CliOptions {
   const config: SpecConfig = {
     http: {
       base,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: {},
     },
   };
 

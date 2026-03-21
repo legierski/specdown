@@ -74,9 +74,11 @@ describe('parseArgs', () => {
     expect(opts.command).toBe('validate');
   });
 
-  it('sets Content-Type header by default', () => {
+  it('does NOT inject Content-Type header by default', () => {
+    // Content-Type should only be set when request has a JSON body,
+    // not injected globally. A GET request should not send Content-Type.
     const opts = parseArgs(['run']);
-    expect(opts.config.http.headers['Content-Type']).toBe('application/json');
+    expect(opts.config.http.headers['Content-Type']).toBeUndefined();
   });
 
   it('handles --base as last arg without value', () => {

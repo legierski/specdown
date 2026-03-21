@@ -254,7 +254,9 @@ Authorization: Bearer custom_key
     expect(result.passed).toBe(1);
   });
 
-  it('removes header with none value', async () => {
+  it('removes header with empty value in step headers', async () => {
+    // Empty value (no value after colon) removes an inherited header.
+    // "Authorization:" with no value = remove Authorization from this request.
     const md = `# API
 
 ## Remove auth
@@ -262,7 +264,7 @@ Authorization: Bearer custom_key
 **Headers**
 
 \`\`\`http
-Authorization: none
+Authorization:
 \`\`\`
 
 **Request** → \`GET /v1/echo-headers\`
@@ -276,6 +278,86 @@ Authorization: none
 \`\`\`
 `;
     const result = await runSpec(md, config());
+    expect(result.passed).toBe(1);
+  });
+
+  it('does NOT treat "none" as a magic removal sentinel', async () => {
+    // "none" is no longer a magic keyword — it sends the literal string "none"
+    const md = `# API
+
+## Auth is literally "none"
+
+**Headers**
+
+\`\`\`http
+Authorization: none
+\`\`\`
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{
+  "auth": "none"
+}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    expect(result.passed).toBe(1);
+  });
+
+  it('infers Content-Type: application/json when request has a JSON body', async () => {
+    // Runner should auto-set Content-Type when body is present and not already set.
+    // Verified by POSTing to echo-headers which reflects content-type back.
+    const md = `# API
+
+## Post without explicit Content-Type
+
+**Request** → \`POST /v1/echo-headers\`
+
+\`\`\`json
+{"check": "ct"}
+\`\`\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{
+  "content_type": "application/json"
+}
+\`\`\`
+`;
+    // Config has NO Content-Type — runner must infer it from the body
+    const result = await runSpec(md, {
+      http: { base: `http://localhost:${port}`, headers: {} },
+    });
+    expect(result.passed).toBe(1);
+  });
+
+  it('does NOT send Content-Type on GET requests with no body', async () => {
+    // A GET with no body should not have Content-Type injected
+    const md = `# API
+
+## GET without Content-Type
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{
+  "content_type": null
+}
+\`\`\`
+`;
+    // Config has NO Content-Type header
+    const result = await runSpec(md, {
+      http: {
+        base: `http://localhost:${port}`,
+        headers: { 'Authorization': 'Bearer test_key' },
+      },
+    });
     expect(result.passed).toBe(1);
   });
 

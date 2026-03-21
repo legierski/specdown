@@ -60,11 +60,7 @@ function extractHeadersBlock(
     if (line.includes(':')) {
       const [key, ...valueParts] = line.split(':');
       const value = valueParts.join(':').trim();
-      if (value === '' || value === 'none') {
-        headers[key.trim()] = 'none';
-      } else {
-        headers[key.trim()] = value;
-      }
+      headers[key.trim()] = value;
     }
     idx++;
   }

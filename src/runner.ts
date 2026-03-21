@@ -41,7 +41,7 @@ export async function runSpec(markdown: string, config: SpecConfig): Promise<Spe
         // Build headers: config defaults + step overrides
         const headers: Record<string, string> = { ...config.http.headers };
         for (const [key, value] of Object.entries(step.headers)) {
-          if (value === 'none' || value === '') {
+          if (value === '') {
             delete headers[key];
           } else {
             headers[key] = value;
@@ -55,6 +55,11 @@ export async function runSpec(markdown: string, config: SpecConfig): Promise<Spe
         let bodyStr: string | undefined;
         if (step.body) {
           bodyStr = substituteVars(JSON.stringify(step.body), vars);
+        }
+
+        // Infer Content-Type for JSON bodies if not already set
+        if (bodyStr && !headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
         }
 
         // Execute request

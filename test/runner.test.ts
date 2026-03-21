@@ -250,6 +250,7 @@ describe('runSpec', () => {
   });
 
   it('applies custom headers per step', async () => {
+    // Empty value (no value after colon) removes inherited header
     const md = `# API
 
 ## Without auth fails
@@ -257,7 +258,7 @@ describe('runSpec', () => {
 **Headers**
 
 \`\`\`http
-Authorization: none
+Authorization:
 \`\`\`
 
 **Request** → \`GET /v1/protected\`
