@@ -1,6 +1,6 @@
 {
-  "name": "@happynerdy/specdown",
-  "version": "0.8.0",
+  "name": "specdown",
+  "version": "0.8.1",
   "description": "API documentation that tests itself. Write specs in markdown, run them as tests.",
   "type": "module",
   "main": "dist/index.js",
@@ -29,6 +29,9 @@
   ],
   "author": "Peter Legierski",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "tsx": "^4.21.0",
