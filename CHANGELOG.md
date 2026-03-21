@@ -2,6 +2,10 @@
 
 All notable changes to specdown.
 
+## 0.8.2
+
+Fixed variable substitution in step headers — `$token` in `**Headers**` blocks was sent as a literal string instead of the substituted value. Path and body substitution were already correct; only step-level headers were missed.
+
 ## 0.8.1
 
 Fixed duplicate `Set-Cookie` header handling — runner was overwriting first value when multiple headers shared the same name. Added CRLF line ending robustness to the parser. Recognized `title`, `author`, `description` as valid frontmatter metadata fields (no longer triggers warnings). Added CI workflow and `engines` field.
