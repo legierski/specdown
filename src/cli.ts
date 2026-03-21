@@ -15,14 +15,14 @@ import { join, resolve } from 'node:path';
 import { runSpec } from './runner.js';
 import type { SpecConfig } from './config.js';
 
-interface CliOptions {
+export interface CliOptions {
   command: string;
   targets: string[];
   format: 'pretty' | 'json';
   config: SpecConfig;
 }
 
-function parseArgs(args: string[]): CliOptions {
+export function parseArgs(args: string[]): CliOptions {
   const command = args[0] || 'run';
   const targets: string[] = [];
   let format: 'pretty' | 'json' = 'pretty';
@@ -59,7 +59,7 @@ function parseArgs(args: string[]): CliOptions {
   return { command, targets, format, config };
 }
 
-function findSpecFiles(target: string): string[] {
+export function findSpecFiles(target: string): string[] {
   const resolved = resolve(target);
 
   if (!existsSync(resolved)) {
@@ -177,7 +177,14 @@ Examples:
   process.exit(totalFailed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run when executed directly (not when imported for testing)
+const isMainModule = process.argv[1]?.endsWith('/specdown') ||
+  process.argv[1]?.endsWith('/cli.js') ||
+  process.argv[1]?.endsWith('/cli.ts');
+
+if (isMainModule) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
