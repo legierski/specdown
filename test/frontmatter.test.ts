@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:http';
-import { parseFrontmatter, stripFrontmatter } from '../src/parser.js';
+import { parseFrontmatter, stripFrontmatter } from '../src/frontmatter.js';
 import { mergeConfigs } from '../src/config.js';
 import { runSpec } from '../src/runner.js';
 import type { SpecConfig } from '../src/config.js';

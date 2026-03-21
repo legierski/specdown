@@ -14,7 +14,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { runSpec } from './runner.js';
 import { resolveConfig, mergeConfigs } from './config.js';
-import { parseFrontmatter, stripFrontmatter } from './parser.js';
+import { parseFrontmatter, stripFrontmatter } from './frontmatter.js';
 import type { SpecConfig } from './config.js';
 
 export interface CliOptions {
