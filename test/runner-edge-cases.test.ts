@@ -13,12 +13,23 @@ beforeAll(async () => {
     req.on('end', () => {
       const url = new URL(req.url!, 'http://localhost');
 
-      // Slow endpoint (100ms delay)
+      // Slow endpoint (100ms delay before headers + body)
       if (url.pathname === '/v1/slow') {
         setTimeout(() => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end('{"ok": true}');
         }, 100);
+        return;
+      }
+
+      // Body-slow endpoint: sends headers immediately, drips body after 200ms
+      // Used to test that AbortController covers res.json(), not just fetch()
+      if (url.pathname === '/v1/body-slow') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.flushHeaders(); // headers arrive at client immediately
+        setTimeout(() => {
+          res.end('{"ok": true}');
+        }, 200); // body arrives 200ms later
         return;
       }
 
@@ -559,6 +570,36 @@ Authorization: none
     });
     expect(result.failed).toBe(1);
     expect(result.tests[0].errors[0]).toMatch(/timeout|abort|timed out/i);
+  }, 2000);
+
+  it('times out when body delivery is slow (timeout must cover res.json())', async () => {
+    // BUG: AbortController timer is cleared after fetch() resolves on headers.
+    // res.json() then runs with no timeout — a slow body delivery bypasses it entirely.
+    // Server sends headers immediately, body after 200ms. Timeout = 100ms.
+    // Expected: test fails with timeout error.
+    // Current (broken) behaviour: test passes — body arrives at 200ms, timer was
+    // already cleared when headers arrived at ~0ms.
+    const md = `# API
+
+## Body slow timeout
+
+**Request** → \`GET /v1/body-slow\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"ok": true}
+\`\`\`
+`;
+    const result = await runSpec(md, {
+      http: {
+        base: `http://localhost:${port}`,
+        headers: {},
+        timeout: 100, // headers arrive ~0ms, body at 200ms — should time out
+      },
+    });
+    expect(result.failed).toBe(1);
+    expect(result.tests[0].errors[0]).toMatch(/timeout|timed out/i);
   }, 2000);
 
   it('does not time out when timeout is large enough', async () => {

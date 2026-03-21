@@ -48,40 +48,43 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
     const vars: Record<string, string> = {};
 
     for (const step of test.steps) {
+      // Build headers: config defaults + step overrides
+      const headers: Record<string, string> = { ...config.http.headers };
+      for (const [key, value] of Object.entries(step.headers)) {
+        if (value === '') {
+          delete headers[key];
+        } else {
+          headers[key] = value;
+        }
+      }
+
+      // Substitute variables in path
+      const path = substituteVars(step.path, vars);
+
+      // Substitute variables in request body
+      let bodyStr: string | undefined;
+      if (step.body) {
+        bodyStr = substituteVars(JSON.stringify(step.body), vars);
+      }
+
+      // Infer Content-Type for JSON bodies if not already set
+      if (bodyStr && !headers['Content-Type'] && !headers['content-type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      // Execute request — AbortController covers BOTH fetch() and res.json().
+      // Timer is NOT cleared after fetch() resolves on headers; it stays armed
+      // through body parsing so slow body delivery is also covered by the timeout.
+      const url = `${config.http.base}${path}`;
+      const timeout = config.http.timeout;
+      let abortTimer: ReturnType<typeof setTimeout> | undefined;
+      const controller = new AbortController();
+      if (timeout !== undefined && timeout > 0) {
+        abortTimer = setTimeout(() => controller.abort(), timeout);
+      }
+
       try {
-        // Build headers: config defaults + step overrides
-        const headers: Record<string, string> = { ...config.http.headers };
-        for (const [key, value] of Object.entries(step.headers)) {
-          if (value === '') {
-            delete headers[key];
-          } else {
-            headers[key] = value;
-          }
-        }
-
-        // Substitute variables in path
-        const path = substituteVars(step.path, vars);
-
-        // Substitute variables in request body
-        let bodyStr: string | undefined;
-        if (step.body) {
-          bodyStr = substituteVars(JSON.stringify(step.body), vars);
-        }
-
-        // Infer Content-Type for JSON bodies if not already set
-        if (bodyStr && !headers['Content-Type'] && !headers['content-type']) {
-          headers['Content-Type'] = 'application/json';
-        }
-
-        // Execute request
-        const url = `${config.http.base}${path}`;
-        const timeout = config.http.timeout;
-        let abortTimer: ReturnType<typeof setTimeout> | undefined;
-        const controller = new AbortController();
-        if (timeout !== undefined && timeout > 0) {
-          abortTimer = setTimeout(() => controller.abort(), timeout);
-        }
-
+        // Fetch — throws AbortError if aborted during network phase
         let res: Response;
         try {
           res = await fetch(url, {
@@ -91,12 +94,12 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
             redirect: 'manual',
             signal: controller.signal,
           });
-        } finally {
-          if (abortTimer !== undefined) clearTimeout(abortTimer);
-        }
-
-        if (controller.signal.aborted) {
-          errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+        } catch (err: any) {
+          if (controller.signal.aborted) {
+            errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+          } else {
+            errors.push(`Request failed: ${err.message}`);
+          }
           break;
         }
 
@@ -130,13 +133,17 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           if (errors.length > 0) break;
         }
 
-        // Check response body if expected
+        // Check response body if expected — signal still armed, covers slow body delivery
         if (step.response) {
           let actual: any;
           try {
             actual = await res.json();
-          } catch {
-            errors.push('Expected JSON response body but could not parse');
+          } catch (err: any) {
+            if (controller.signal.aborted) {
+              errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+            } else {
+              errors.push('Expected JSON response body but could not parse');
+            }
             break;
           }
           const matchErrors = matchResponse(actual, step.response, step.responseAnnotations, vars);
@@ -146,8 +153,16 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           }
         }
       } catch (err: any) {
-        errors.push(`Request failed: ${err.message}`);
+        // Catch-all for unexpected errors not caught by inner try blocks
+        if (controller.signal.aborted) {
+          errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+        } else {
+          errors.push(`Request failed: ${err.message}`);
+        }
         break;
+      } finally {
+        // Clear timer after entire step (fetch + body parsing) completes
+        if (abortTimer !== undefined) clearTimeout(abortTimer);
       }
     }
 
