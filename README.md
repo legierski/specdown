@@ -16,6 +16,7 @@ specdown run docs/
 specdown run api.spec.md --base http://localhost:8080
 specdown run docs/ --test "create user"
 specdown run api.spec.md --format json
+specdown run api.spec.md --verbose     # show full response body on failure
 
 # Validate spec files without making HTTP requests:
 specdown check api.spec.md
@@ -57,6 +58,24 @@ docs/api.spec.md [http://localhost:3000]
 ```
 
 Exit code 0 if all files have tests and no warnings; 1 otherwise — suitable for CI gates.
+
+## Failure output
+
+When a test fails, specdown shows which step failed and the HTTP status received:
+
+```
+docs/api.spec.md
+  ✗ Create and retrieve user (312ms)
+    Step 2/3: GET /v1/users/usr_abc
+    Response: 200
+    Field "id": "usr_abc" does not match "usr_xxxxxxxxxxxx"
+```
+
+By default, the response body is shown only if it's short (≤ 200 chars). Use `--verbose` to always show it:
+
+```bash
+specdown run api.spec.md --verbose
+```
 
 ## Spec file format
 
