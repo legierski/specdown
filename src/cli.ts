@@ -11,8 +11,9 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { runSpec } from './runner.js';
+import { resolveConfig, mergeConfigs } from './config.js';
 import type { SpecConfig } from './config.js';
 
 export interface CliOptions {
@@ -137,7 +138,15 @@ Examples:
 
   for (const file of allFiles) {
     const markdown = readFileSync(file, 'utf-8');
-    const result = await runSpec(markdown, opts.config);
+
+    // Resolve config from .specdown files relative to this spec file
+    let fileConfig = resolveConfig(dirname(file));
+    // CLI --base flag overrides .specdown config
+    if (opts.config.http.base !== 'http://localhost:3000') {
+      fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
+    }
+
+    const result = await runSpec(markdown, fileConfig);
 
     totalPassed += result.passed;
     totalFailed += result.failed;
