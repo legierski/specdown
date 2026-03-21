@@ -142,14 +142,36 @@ Frontmatter merges with `.specdown` config (frontmatter wins per-key). The `--ba
 To remove a config header for a specific request, set it to an empty value:
 
 ```markdown
+**Request** → `GET /v1/public`
+
 **Headers**
 
 ```http
 Authorization:
 ```
+
+**Response** → `🟢 200 OK`
 ```
 
 This removes `Authorization` from that step only.
+
+The `**Headers**` block can appear either before or after the `**Request**` line — both orderings work. The natural HTTP message order (request line first, then headers) is supported:
+
+```markdown
+**Request** → `POST /v1/items`
+
+**Headers**
+
+```http
+Idempotency-Key: my-key-123
+```
+
+```json
+{"name": "widget"}
+```
+
+**Response** → `🟢 201 Created`
+```
 
 ## Filtering tests
 
