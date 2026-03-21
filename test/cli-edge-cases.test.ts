@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -364,5 +364,123 @@ POST requests are limited to 20/minute.
 `;
     const result = await runSpec(apiDocs, config());
     expect(result.tests).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────
+// Exit code logic tests
+// ──────────────────────────────────────
+
+describe('exit code logic', () => {
+  it('exit code 0 when all tests pass (failed === 0)', async () => {
+    const md = `# API
+
+## Pass
+
+**Request** → \`POST /v1/items\`
+
+\`\`\`json
+{"name": "Exit Code Test"}
+\`\`\`
+
+**Response** → \`🟢 201 Created\`
+
+\`\`\`json
+{
+  "id": "item_xxxxxxxxxxxx",
+  "name": "Exit Code Test"
+}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    // CLI uses: process.exit(totalFailed > 0 ? 1 : 0)
+    const exitCode = result.failed > 0 ? 1 : 0;
+    expect(exitCode).toBe(0);
+    expect(result.passed).toBeGreaterThan(0);
+  });
+
+  it('exit code 1 when any test fails', async () => {
+    const md = `# API
+
+## Fail
+
+**Request** → \`GET /v1/nonexistent\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"ok": true}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    const exitCode = result.failed > 0 ? 1 : 0;
+    expect(exitCode).toBe(1);
+    expect(result.failed).toBeGreaterThan(0);
+  });
+
+  it('exit code 0 when spec has no tests (empty spec)', async () => {
+    const md = '# Just a title\n\nSome docs.\n';
+    const result = await runSpec(md, config());
+    // No tests found — should not be treated as failure
+    const exitCode = result.failed > 0 ? 1 : 0;
+    expect(exitCode).toBe(0);
+    expect(result.tests).toEqual([]);
+  });
+
+  it('exit code 1 when mixed pass/fail results', async () => {
+    const md = `# API
+
+## This passes
+
+**Request** → \`POST /v1/items\`
+
+\`\`\`json
+{"name": "Pass"}
+\`\`\`
+
+**Response** → \`🟢 201 Created\`
+
+\`\`\`json
+{
+  "id": "item_xxxxxxxxxxxx",
+  "name": "Pass"
+}
+\`\`\`
+
+## This fails
+
+**Request** → \`GET /v1/nonexistent\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{"ok": true}
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    const exitCode = result.failed > 0 ? 1 : 0;
+    expect(exitCode).toBe(1);
+    expect(result.passed).toBeGreaterThan(0);
+    expect(result.failed).toBeGreaterThan(0);
+  });
+});
+
+// ──────────────────────────────────────
+// findSpecFiles — process.exit on nonexistent path
+// ──────────────────────────────────────
+
+describe('findSpecFiles error handling', () => {
+  it('calls process.exit(1) for nonexistent path', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as any);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => findSpecFiles('/nonexistent/path/to/nowhere')).toThrow('process.exit called');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(errorSpy).toHaveBeenCalled();
+
+    exitSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });
