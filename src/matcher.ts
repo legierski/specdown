@@ -33,16 +33,37 @@ export function matchResponse(
   actual: any,
   expected: any,
   annotations: Record<string, string>,
-  vars: Record<string, string>
+  vars: Record<string, string>,
+  _path: string = ''
 ): string[] {
   const errors: string[] = [];
+  const prefix = _path ? `${_path}.` : '';
+
+  // Top-level array: positional partial matching
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual)) {
+      return [`Expected an array but got ${typeof actual}`];
+    }
+    if (expected.length === 0) {
+      return []; // just asserts actual is an array
+    }
+    if (actual.length < expected.length) {
+      return [`Expected at least ${expected.length} items, got ${actual.length}`];
+    }
+    for (let i = 0; i < expected.length; i++) {
+      const itemErrors = matchResponse(actual[i], expected[i], {}, vars, `${_path}[${i}]`);
+      errors.push(...itemErrors);
+    }
+    return errors;
+  }
 
   for (const [key, val] of Object.entries(expected)) {
+    const fieldPath = `${prefix}${key}`;
     const annotation = annotations[key];
 
     // Check field exists in actual
-    if (actual[key] === undefined) {
-      errors.push(`Missing field "${key}" in response`);
+    if (actual == null || actual[key] === undefined) {
+      errors.push(`Missing field "${fieldPath}" in response`);
       continue;
     }
 
@@ -52,7 +73,7 @@ export function matchResponse(
       // Still validate pattern if applicable
       if (typeof val === 'string' && (/x{2,}/.test(val) || /0{2,}/.test(val))) {
         if (!toPattern(val).test(actual[key])) {
-          errors.push(`Field "${key}": "${actual[key]}" does not match pattern "${val}"`);
+          errors.push(`Field "${fieldPath}": "${actual[key]}" does not match pattern "${val}"`);
           continue;
         }
       }
@@ -66,12 +87,12 @@ export function matchResponse(
       // Validate pattern first
       if (typeof val === 'string' && (/x{2,}/.test(val) || /0{2,}/.test(val))) {
         if (!toPattern(val).test(actual[key])) {
-          errors.push(`Field "${key}": "${actual[key]}" does not match pattern "${val}"`);
+          errors.push(`Field "${fieldPath}": "${actual[key]}" does not match pattern "${val}"`);
           continue;
         }
       }
       if (actual[key] === vars[notMatch[1]]) {
-        errors.push(`Field "${key}": expected NOT to equal "${vars[notMatch[1]]}" but did`);
+        errors.push(`Field "${fieldPath}": expected NOT to equal "${vars[notMatch[1]]}" but did`);
       }
       continue;
     }
@@ -80,7 +101,7 @@ export function matchResponse(
     if (annotation?.startsWith('one of:')) {
       const options = annotation.replace('one of:', '').split(',').map(s => s.trim());
       if (!options.includes(actual[key])) {
-        errors.push(`Field "${key}": "${actual[key]}" not in [${options.join(', ')}]`);
+        errors.push(`Field "${fieldPath}": "${actual[key]}" not in [${options.join(', ')}]`);
       }
       continue;
     }
@@ -89,7 +110,7 @@ export function matchResponse(
     if (annotation?.startsWith('length:')) {
       const expectedLength = parseInt(annotation.replace('length:', '').trim());
       if (typeof actual[key] === 'string' && actual[key].length !== expectedLength) {
-        errors.push(`Field "${key}": length ${actual[key].length} !== expected ${expectedLength}`);
+        errors.push(`Field "${fieldPath}": length ${actual[key].length} !== expected ${expectedLength}`);
       }
       continue;
     }
@@ -100,7 +121,7 @@ export function matchResponse(
         const varName = val.slice(1);
         if (vars[varName] !== undefined) {
           if (actual[key] !== vars[varName]) {
-            errors.push(`Field "${key}": "${actual[key]}" !== saved $${varName} ("${vars[varName]}")`);
+            errors.push(`Field "${fieldPath}": "${actual[key]}" !== saved $${varName} ("${vars[varName]}")`);
           }
           continue;
         }
@@ -108,17 +129,16 @@ export function matchResponse(
 
       // Pattern matching
       if (!matchesPattern(val, actual[key])) {
-        errors.push(`Field "${key}": "${actual[key]}" does not match "${val}"`);
+        errors.push(`Field "${fieldPath}": "${actual[key]}" does not match "${val}"`);
       }
     } else if (typeof val === 'object' && val !== null) {
-      // Deep comparison for objects and arrays
-      if (JSON.stringify(actual[key]) !== JSON.stringify(val)) {
-        errors.push(`Field "${key}": ${JSON.stringify(actual[key])} !== ${JSON.stringify(val)}`);
-      }
+      // Recursive partial matching for nested objects and arrays
+      const nestedErrors = matchResponse(actual[key], val, {}, vars, fieldPath);
+      errors.push(...nestedErrors);
     } else {
       // Primitive: exact match (number, boolean, null)
       if (actual[key] !== val) {
-        errors.push(`Field "${key}": ${JSON.stringify(actual[key])} !== ${JSON.stringify(val)}`);
+        errors.push(`Field "${fieldPath}": ${JSON.stringify(actual[key])} !== ${JSON.stringify(val)}`);
       }
     }
   }
