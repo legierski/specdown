@@ -5,7 +5,7 @@
  * They also run as tests.
  */
 
-export { parseMarkdownSpec, type Test, type Step } from './parser.js';
+export { parseMarkdownSpec, type Test, type Step, type HttpStep, type CliStep } from './parser.js';
 export { matchResponse, substituteVars } from './matcher.js';
 export { toPattern, matchesPattern } from './pattern.js';
 export { splitLineComment, parseJsonWithAnnotations } from './json.js';

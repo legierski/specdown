@@ -5,10 +5,11 @@
  * and validates responses against expected values.
  */
 
-import { parseMarkdownSpec, type Step } from './parser.js';
+import { parseMarkdownSpec, type Step, type HttpStep, type CliStep } from './parser.js';
 import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
 import { analyzeVarChain } from './analyze.js';
+import { execCommand } from './exec.js';
 import type { SpecConfig } from './config.js';
 
 export interface FailedStepContext {
@@ -16,10 +17,12 @@ export interface FailedStepContext {
   stepIndex: number;
   /** Total number of steps in the test. */
   stepCount: number;
+  /** 'http' or 'cli' — determines which fields are meaningful. */
+  mode: 'http' | 'cli';
   method: string;
-  /** Request path after variable substitution. */
+  /** Request path after variable substitution, or command for CLI steps. */
   path: string;
-  /** Actual HTTP status code received. */
+  /** Actual HTTP status code received (0 for CLI steps). */
   status: number;
   /** Parsed response body, or null if body was not parsed (e.g. status mismatch). */
   actualBody: any;
@@ -45,12 +48,12 @@ export interface SpecResult {
 }
 
 /**
- * Execute a single step: build headers, fetch, assert status/headers/body.
+ * Execute a single HTTP step: build headers, fetch, assert status/headers/body.
  * Mutates `vars` in-place when save-as annotations succeed.
  * Returns errors and, on failure, a FailedStepContext for output.
  */
-async function executeStep(
-  step: Step,
+async function executeHttpStep(
+  step: HttpStep,
   config: SpecConfig,
   vars: Record<string, string>,
   stepIndex: number,
@@ -72,7 +75,7 @@ async function executeStep(
   // Substitute variables in path and body
   const path = substituteVars(step.path, vars);
   const makeFailedStep = (status: number, body: any = null): FailedStepContext =>
-    ({ stepIndex, stepCount, method: step.method, path, status, actualBody: body });
+    ({ stepIndex, stepCount, mode: 'http', method: step.method, path, status, actualBody: body });
 
   // Use !== null (not if(step.body)) so falsey JSON values like false, 0, "" are included.
   // null is the sentinel for "no body block in spec".
@@ -176,6 +179,83 @@ async function executeStep(
   }
 
   return { errors };
+}
+
+/**
+ * Execute a single CLI step: run command, check exit code, match output.
+ * Mutates `vars` in-place when save-as annotations succeed.
+ */
+async function executeCliStep(
+  step: CliStep,
+  config: SpecConfig,
+  vars: Record<string, string>,
+  stepIndex: number,
+  stepCount: number,
+): Promise<{ errors: string[]; failedStep?: FailedStepContext }> {
+  const errors: string[] = [];
+  const command = substituteVars(step.command, vars);
+
+  const makeFailedStep = (body: any = null): FailedStepContext =>
+    ({ stepIndex, stepCount, mode: 'cli', method: 'RUN', path: command, status: 0, actualBody: body });
+
+  const timeout = config.http.timeout;
+  const result = execCommand(command, timeout);
+
+  // Check for timeout
+  if (result.exitCode === -1) {
+    errors.push(`Command timed out after ${timeout}ms: ${command}`);
+    return { errors, failedStep: makeFailedStep() };
+  }
+
+  // Check exit code (if expected)
+  if (step.expectedExit !== null && result.exitCode !== step.expectedExit) {
+    errors.push(`Expected exit ${step.expectedExit}, got exit ${result.exitCode}`);
+    return { errors, failedStep: makeFailedStep(result.stdout) };
+  }
+
+  // Check output (if expected)
+  if (step.expectedOutput !== null) {
+    if (typeof step.expectedOutput === 'object') {
+      // JSON output matching — parse stdout as JSON, use matchResponse
+      let actual: any;
+      try {
+        actual = JSON.parse(result.stdout);
+      } catch {
+        errors.push(`Expected JSON output but could not parse stdout`);
+        return { errors, failedStep: makeFailedStep(result.stdout) };
+      }
+      const matchErrors = matchResponse(actual, step.expectedOutput, step.outputAnnotations, vars);
+      if (matchErrors.length > 0) {
+        errors.push(...matchErrors);
+        return { errors, failedStep: makeFailedStep(actual) };
+      }
+    } else {
+      // Plain text matching
+      const expected = substituteVars(String(step.expectedOutput), vars);
+      if (result.stdout !== expected) {
+        errors.push(`Output mismatch:\n  expected: ${expected}\n  actual:   ${result.stdout}`);
+        return { errors, failedStep: makeFailedStep(result.stdout) };
+      }
+    }
+  }
+
+  return { errors };
+}
+
+/**
+ * Dispatch step execution based on mode.
+ */
+async function executeStep(
+  step: Step,
+  config: SpecConfig,
+  vars: Record<string, string>,
+  stepIndex: number,
+  stepCount: number,
+): Promise<{ errors: string[]; failedStep?: FailedStepContext }> {
+  if (step.mode === 'cli') {
+    return executeCliStep(step, config, vars, stepIndex, stepCount);
+  }
+  return executeHttpStep(step, config, vars, stepIndex, stepCount);
 }
 
 /**

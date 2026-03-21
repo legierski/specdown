@@ -10,7 +10,8 @@ import { extractJsonBlock, extractHeadersBlock } from './extract.js';
 
 export type { SpecConfig };
 
-export interface Step {
+export interface HttpStep {
+  mode: 'http';
   headers: Record<string, string>;
   method: string;
   path: string;
@@ -21,6 +22,16 @@ export interface Step {
   response: any;
   responseAnnotations: Record<string, string>;
 }
+
+export interface CliStep {
+  mode: 'cli';
+  command: string;
+  expectedExit: number | null;
+  expectedOutput: any;
+  outputAnnotations: Record<string, string>;
+}
+
+export type Step = HttpStep | CliStep;
 
 export interface Test {
   name: string;
@@ -84,6 +95,88 @@ export function parseMarkdownSpec(raw: string): ParseResult {
           currentHeaders = result.headers;
           idx = result.endIdx;
         }
+        continue;
+      }
+
+      // Run line (CLI mode)
+      if (line.includes('**Run**')) {
+        sectionHadRequest = true; // reuse flag — Run is a valid step initiator
+
+        // Extract command: inline (`**Run** → `cmd``) or code block
+        let command: string | null = null;
+        const inlineMatch = line.match(/`(.+?)`/);
+        if (inlineMatch) {
+          command = inlineMatch[1];
+          idx++;
+        } else {
+          // Code block follows: skip to next ``` opener
+          idx++;
+          while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
+          if (idx < lines.length) {
+            idx++; // skip opening ```bash or ```
+            const cmdLines: string[] = [];
+            while (idx < lines.length && !lines[idx].startsWith('```')) {
+              cmdLines.push(lines[idx]);
+              idx++;
+            }
+            if (idx < lines.length) idx++; // skip closing ```
+            command = cmdLines.join('\n');
+          }
+        }
+
+        if (!command) {
+          warnings.push(`"${name}" — Run line has no command (step skipped)`);
+          continue;
+        }
+
+        // Find Output line
+        while (idx < lines.length && !lines[idx].includes('**Output**')) idx++;
+
+        let expectedExit: number | null = null;
+        let expectedOutput: any = null;
+        let outputAnnotations: Record<string, string> = {};
+
+        if (idx < lines.length) {
+          const outputLine = lines[idx];
+          const exitMatch = outputLine.match(/exit\s+(\d+)/);
+          if (exitMatch) {
+            expectedExit = parseInt(exitMatch[1]);
+          }
+          idx++;
+
+          // Look for output block (plain text or JSON)
+          while (idx < lines.length && lines[idx].trim() === '') idx++;
+          if (idx < lines.length && lines[idx].startsWith('```')) {
+            const isJson = lines[idx].includes('json');
+            if (isJson) {
+              const result = extractJsonBlock(lines, idx);
+              if (result) {
+                expectedOutput = result.data;
+                outputAnnotations = result.annotations;
+                idx = result.endIdx;
+              }
+            } else {
+              // Plain text block
+              idx++; // skip opening ```
+              const textLines: string[] = [];
+              while (idx < lines.length && !lines[idx].startsWith('```')) {
+                textLines.push(lines[idx]);
+                idx++;
+              }
+              if (idx < lines.length) idx++; // skip closing ```
+              expectedOutput = textLines.join('\n');
+            }
+          }
+        }
+
+        steps.push({
+          mode: 'cli',
+          command,
+          expectedExit,
+          expectedOutput,
+          outputAnnotations,
+        });
+
         continue;
       }
 
@@ -192,6 +285,7 @@ export function parseMarkdownSpec(raw: string): ParseResult {
         }
 
         steps.push({
+          mode: 'http',
           headers: { ...currentHeaders },
           method,
           path,
@@ -213,8 +307,8 @@ export function parseMarkdownSpec(raw: string): ParseResult {
     if (steps.length > 0) {
       tests.push({ name, steps });
     } else if (!sectionHadRequest) {
-      // Section had no Request lines at all — warn about prose-only sections
-      warnings.push(`"${name}" — section has no Request lines (no tests generated)`);
+      // Section had no Request or Run lines at all — warn about prose-only sections
+      warnings.push(`"${name}" — section has no Request or Run lines (no tests generated)`);
     }
   }
 

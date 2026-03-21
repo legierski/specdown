@@ -2,6 +2,10 @@
 
 All notable changes to specdown.
 
+## 0.9.0
+
+CLI mode — specdown is no longer HTTP-only. Use `**Run**` and `**Output**` keywords to test command-line tools. Inline commands (`**Run** → \`echo hello\``) and code block commands (`**Run** ↓` + bash block) both work. Exit code assertions (`**Output** → \`🟢 exit 0\``), JSON output matching with annotations, plain text output matching, variable substitution in commands, and timeout support all carry over from HTTP mode. Parser uses a union type (`Step = HttpStep | CliStep`) making the architecture extensible for future modes. Static variable chain analysis updated to check CLI steps.
+
 ## 0.8.2
 
 Fixed variable substitution in step headers — `$token` in `**Headers**` blocks was sent as a literal string instead of the substituted value. Path and body substitution were already correct; only step-level headers were missed.

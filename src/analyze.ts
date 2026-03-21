@@ -53,36 +53,70 @@ export function analyzeVarChain(tests: Test[]): string[] {
       const stepNum = i + 1;
       const refs = new Set<string>();
 
-      // 1. Path — any $var pattern (substituteVars scans the full string)
-      for (const name of extractVarRefs(step.path)) refs.add(name);
+      if (step.mode === 'cli') {
+        // CLI step: check command for $var references
+        for (const name of extractVarRefs(step.command)) refs.add(name);
 
-      // 2. Body — JSON stringified (substituteVars scans the full string)
-      if (step.body !== null && step.body !== undefined) {
-        for (const name of extractVarRefs(JSON.stringify(step.body))) refs.add(name);
-      }
-
-      // 3. Expected response values — string values starting with $ at any depth
-      if (step.response !== null && step.response !== undefined) {
-        collectResponseRefs(step.response, refs);
-      }
-
-      // 4. responseAnnotations with "not: $var"
-      for (const annotation of Object.values(step.responseAnnotations)) {
-        const notMatch = annotation?.match(/^not:\s+\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
-        if (notMatch) refs.add(notMatch[1]);
-      }
-
-      // Check each reference against the set of defined variables
-      for (const name of refs) {
-        if (!defined.has(name)) {
-          warnings.push(`"${test.name}" — step ${stepNum}: $${name} is referenced but never saved`);
+        // Expected output — string values starting with $ at any depth
+        if (step.expectedOutput !== null && step.expectedOutput !== undefined) {
+          if (typeof step.expectedOutput === 'object') {
+            collectResponseRefs(step.expectedOutput, refs);
+          } else {
+            for (const name of extractVarRefs(String(step.expectedOutput))) refs.add(name);
+          }
         }
-      }
 
-      // Commit saves AFTER checking — forward references are flagged
-      for (const annotation of Object.values(step.responseAnnotations)) {
-        const saveMatch = annotation?.match(/^save as:\s*\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
-        if (saveMatch) defined.add(saveMatch[1]);
+        // outputAnnotations with "not: $var"
+        for (const annotation of Object.values(step.outputAnnotations)) {
+          const notMatch = annotation?.match(/^not:\s+\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (notMatch) refs.add(notMatch[1]);
+        }
+
+        // Check each reference against the set of defined variables
+        for (const name of refs) {
+          if (!defined.has(name)) {
+            warnings.push(`"${test.name}" — step ${stepNum}: $${name} is referenced but never saved`);
+          }
+        }
+
+        // Commit saves AFTER checking
+        for (const annotation of Object.values(step.outputAnnotations)) {
+          const saveMatch = annotation?.match(/^save as:\s*\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (saveMatch) defined.add(saveMatch[1]);
+        }
+      } else {
+        // HTTP step: original analysis
+        // 1. Path — any $var pattern (substituteVars scans the full string)
+        for (const name of extractVarRefs(step.path)) refs.add(name);
+
+        // 2. Body — JSON stringified (substituteVars scans the full string)
+        if (step.body !== null && step.body !== undefined) {
+          for (const name of extractVarRefs(JSON.stringify(step.body))) refs.add(name);
+        }
+
+        // 3. Expected response values — string values starting with $ at any depth
+        if (step.response !== null && step.response !== undefined) {
+          collectResponseRefs(step.response, refs);
+        }
+
+        // 4. responseAnnotations with "not: $var"
+        for (const annotation of Object.values(step.responseAnnotations)) {
+          const notMatch = annotation?.match(/^not:\s+\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (notMatch) refs.add(notMatch[1]);
+        }
+
+        // Check each reference against the set of defined variables
+        for (const name of refs) {
+          if (!defined.has(name)) {
+            warnings.push(`"${test.name}" — step ${stepNum}: $${name} is referenced but never saved`);
+          }
+        }
+
+        // Commit saves AFTER checking — forward references are flagged
+        for (const annotation of Object.values(step.responseAnnotations)) {
+          const saveMatch = annotation?.match(/^save as:\s*\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (saveMatch) defined.add(saveMatch[1]);
+        }
       }
     }
   }

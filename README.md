@@ -1,6 +1,6 @@
 # specdown
 
-API documentation that tests itself. Write your API specs in markdown, run them as tests.
+Documentation that tests itself. Write your specs in markdown — API calls, CLI commands — and run them as tests.
 
 ## Install
 
@@ -198,6 +198,102 @@ Header names are matched case-insensitively (RFC 7230). Header values use the sa
 ```http
 Content-Type: application/json; charset=xxxxx
 ```
+
+## CLI mode — testing command-line tools
+
+Use `**Run**` and `**Output**` instead of `**Request**` and `**Response**` to test CLI tools:
+
+````markdown
+## Simple echo
+
+**Run** → `echo hello world`
+
+**Output** → `🟢 exit 0`
+
+```
+hello world
+```
+````
+
+### Inline vs. block commands
+
+Inline commands go in backticks after the arrow:
+
+```markdown
+**Run** → `echo hello`
+```
+
+Multi-line commands use a code block:
+
+````markdown
+**Run** ↓
+
+```bash
+echo "line one" && \
+echo "line two"
+```
+````
+
+### Exit codes
+
+The exit code is specified in the **Output** line. Use any emoji (decorative) or none:
+
+```markdown
+**Output** → `🟢 exit 0`     # expect success
+**Output** → `🔴 exit 1`     # expect failure
+**Output**                    # don't check exit code
+```
+
+### JSON output matching
+
+CLI output is matched the same way as API responses — partial matching, patterns, annotations:
+
+````markdown
+## Check package info
+
+**Run** → `npm pkg get name version`
+
+**Output** → `🟢 exit 0`
+
+```json
+{
+  "name": "xxxxxxxxxxxx",
+  "version": "x.x.x"
+}
+```
+````
+
+### Variable chaining across CLI and HTTP steps
+
+Variables saved in CLI steps are available in later steps (CLI or HTTP), and vice versa:
+
+````markdown
+## CLI captures a value, HTTP uses it
+
+**Run** → `echo '{"token":"abc123"}'`
+
+**Output** → `🟢 exit 0`
+
+```json
+{
+  "token": "xxxxxx"  // save as: $api_token
+}
+```
+
+**Request** → `GET /v1/me`
+
+**Headers**
+
+```http
+Authorization: Bearer $api_token
+```
+
+**Response** → `🟢 200 OK`
+````
+
+### Timeout
+
+CLI commands use the same timeout as HTTP steps (from config or frontmatter). Commands that exceed the timeout are killed and the test fails.
 
 ## Config
 

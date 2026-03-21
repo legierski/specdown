@@ -33,12 +33,16 @@ export function printPrettyResult(file: string, result: SpecResult, verbose = fa
       if (fs) {
         const n = fs.stepIndex + 1;
         const total = fs.stepCount;
-        console.log(`    ${dim(`Step ${n}/${total}: ${fs.method} ${fs.path}`)}`);
-        console.log(`    ${dim(`Response: ${fs.status}`)}`);
+        if (fs.mode === 'cli') {
+          console.log(`    ${dim(`Step ${n}/${total}: RUN ${fs.path}`)}`);
+        } else {
+          console.log(`    ${dim(`Step ${n}/${total}: ${fs.method} ${fs.path}`)}`);
+          console.log(`    ${dim(`Response: ${fs.status}`)}`);
+        }
         if (fs.actualBody !== null) {
-          const bodyJson = JSON.stringify(fs.actualBody);
-          if (verbose || bodyJson.length <= BODY_INLINE_THRESHOLD) {
-            console.log(`    ${dim(bodyJson)}`);
+          const bodyStr = typeof fs.actualBody === 'string' ? fs.actualBody : JSON.stringify(fs.actualBody);
+          if (verbose || bodyStr.length <= BODY_INLINE_THRESHOLD) {
+            console.log(`    ${dim(bodyStr)}`);
           }
         }
       }
