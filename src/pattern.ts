@@ -55,6 +55,11 @@ export function toPattern(value: string): RegExp {
  * Handles special patterns (any-*, email) and falls back to toPattern.
  */
 export function matchesPattern(pattern: string, actual: string): boolean {
+  // Guard: null/undefined/non-string actual can never match any pattern
+  if (actual == null || typeof actual !== 'string') {
+    return false;
+  }
+
   // any-* wildcard: matches any non-empty string
   if (pattern.startsWith('any-')) {
     return actual.length > 0;

@@ -110,4 +110,30 @@ describe('matchesPattern edge cases', () => {
     // When actual is not a string, matchesPattern should handle gracefully
     expect(matchesPattern('00000', '12345')).toBe(true);
   });
+
+  // ──────────────────────────────────────
+  // BUG: matchesPattern throws on null input (any-* pattern calls null.length)
+  // Should return false instead of throwing.
+  // ──────────────────────────────────────
+
+  it('any-* pattern against null should return false, not throw', () => {
+    expect(matchesPattern('any-text', null as any)).toBe(false);
+  });
+
+  it('any-* pattern against undefined should return false, not throw', () => {
+    expect(matchesPattern('any-value', undefined as any)).toBe(false);
+  });
+
+  it('xx pattern against null should return false, not silently coerce to "null"', () => {
+    // null coerced to "null" would match /^[a-zA-Z0-9_-]{4}$/ — false positive
+    expect(matchesPattern('xxxx', null as any)).toBe(false);
+  });
+
+  it('literal pattern against null should return false', () => {
+    expect(matchesPattern('active', null as any)).toBe(false);
+  });
+
+  it('email pattern against null should return false', () => {
+    expect(matchesPattern('example@example.com', null as any)).toBe(false);
+  });
 });
