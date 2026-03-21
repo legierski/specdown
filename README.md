@@ -295,6 +295,104 @@ Authorization: Bearer $api_token
 
 CLI commands use the same timeout as HTTP steps (from config or frontmatter). Commands that exceed the timeout are killed and the test fails.
 
+## SQL mode — testing databases
+
+Use `**Query**` and `**Result**` to test databases directly. Currently supports SQLite via the `sqlite3` CLI.
+
+````markdown
+## Find active users
+
+**Query** → `SELECT name, email FROM users WHERE status = 'active'`
+
+**Result** → `🟢 2 rows`
+
+```json
+[
+  {"name": "Alice", "email": "alice@example.com"},
+  {"name": "Bob", "email": "bob@example.com"}
+]
+```
+````
+
+### Row and affected counts
+
+Specify expected row count for SELECT queries or affected count for write operations:
+
+```markdown
+**Result** → `🟢 3 rows`       # SELECT returned 3 rows
+**Result** → `🟢 1 affected`   # INSERT/UPDATE/DELETE affected 1 row
+**Result** → `🟢 0 rows`       # empty result set
+**Result**                      # don't check count
+```
+
+### Multi-line queries
+
+Use a code block for complex queries:
+
+````markdown
+**Query** ↓
+
+```sql
+SELECT u.name, COUNT(o.id) as order_count
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+GROUP BY u.name
+HAVING order_count > 0
+```
+
+**Result** → `🟢 1 row`
+````
+
+### Single-row shorthand
+
+For single-row results, use an object instead of an array — specdown matches it against the first row:
+
+````markdown
+**Query** → `SELECT name, email FROM users WHERE id = 1`
+
+**Result** → `🟢 1 row`
+
+```json
+{
+  "name": "Alice",
+  "email": "alice@example.com"
+}
+```
+````
+
+### Variable chaining with SQL
+
+Variables work across all modes — save a value from a SQL query, use it in an HTTP request:
+
+````markdown
+## Insert and verify
+
+**Query** → `INSERT INTO users (name) VALUES ('Charlie')`
+
+**Result** → `🟢 1 affected`
+
+**Query** → `SELECT name FROM users WHERE name = 'Charlie'`
+
+**Result** → `🟢 1 row`
+
+```json
+{
+  "name": "Charlie"
+}
+```
+````
+
+### Database connection
+
+Configure the database in `.specdown`:
+
+```toml
+[sql]
+connection = "test.db"
+```
+
+Or via frontmatter (`connection: test.db`), or CLI flag (`--connection test.db`).
+
 ## Config
 
 Create a `.specdown` file in your project root (TOML format):
@@ -307,6 +405,13 @@ timeout = 5000
 [http.headers]
 Authorization = "Bearer your_token"
 Content-Type = "application/json"
+
+[cli]
+shell = "bash"
+timeout = 10000
+
+[sql]
+connection = "test.db"
 ```
 
 Config files cascade: a `.specdown` in a subdirectory merges with the root config, with the subdirectory taking precedence.
@@ -319,6 +424,8 @@ Add a YAML frontmatter block at the top of a spec file to override config for th
 ---
 base: http://staging.api.com
 timeout: 10000
+connection: test.db
+shell: zsh
 headers:
   Authorization: Bearer staging_token
   X-Version: "2"
@@ -328,13 +435,21 @@ headers:
 ...
 ```
 
-Supported fields: `base`, `timeout`, `headers`. Unknown fields emit a warning.
+Supported fields: `base`, `timeout`, `headers`, `connection`, `shell`. Unknown fields emit a warning.
 
 Frontmatter merges with `.specdown` config (frontmatter wins per-key). The `--base` CLI flag overrides frontmatter base (but not headers or timeout).
 
 ### Removing inherited headers
 
-To remove a config header for a specific request, set it to an empty value:
+In config cascade (`.specdown` files and frontmatter), set a header to `"none"` or `""` to remove it:
+
+```toml
+# In a subfolder .specdown — remove auth for public endpoints
+[http.headers]
+Authorization = "none"
+```
+
+In step-level `**Headers**` blocks, use an empty value to remove a header for that step only:
 
 ```markdown
 **Request** → `GET /v1/public`
@@ -347,8 +462,6 @@ Authorization:
 
 **Response** → `🟢 200 OK`
 ```
-
-This removes `Authorization` from that step only.
 
 The `**Headers**` block can appear either before or after the `**Request**` line — both orderings work. The natural HTTP message order (request line first, then headers) is supported:
 
