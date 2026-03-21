@@ -120,30 +120,40 @@ export function parseMarkdownSpec(raw: string): Test[] {
         const [, method, path] = methodMatch;
         idx++;
 
-        // Look for request body (optional)
+        // Scan between Request and Response: collect optional **Headers** block and
+        // optional JSON body in any order. **Headers** here merges with currentHeaders
+        // so users can write headers after the request line (HTTP message order).
         let body = null;
         let bodyAnnotations: Record<string, string> = {};
-        while (
-          idx < lines.length &&
-          !lines[idx].includes('```json') &&
-          !lines[idx].includes('**Response**')
-        ) {
-          idx++;
-        }
 
-        if (idx < lines.length && lines[idx].includes('```json')) {
-          const result = extractJsonBlock(lines, idx);
-          if (result) {
-            body = result.data;
-            bodyAnnotations = result.annotations;
-            // Apply length annotations to request body
-            for (const [key, annotation] of Object.entries(bodyAnnotations)) {
-              if (annotation.startsWith('length:')) {
-                const length = parseInt(annotation.replace('length:', '').trim());
-                body[key] = 'x'.repeat(length);
+        while (idx < lines.length && !lines[idx].includes('**Response**')) {
+          if (lines[idx].includes('**Headers**')) {
+            // **Headers** after **Request** — merge into currentHeaders for this step
+            idx++;
+            while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
+            if (idx < lines.length) {
+              const result = extractHeadersBlock(lines, idx);
+              for (const [k, v] of Object.entries(result.headers)) {
+                currentHeaders[k] = v;
               }
+              idx = result.endIdx;
             }
-            idx = result.endIdx;
+          } else if (lines[idx].includes('```json')) {
+            const result = extractJsonBlock(lines, idx);
+            if (result) {
+              body = result.data;
+              bodyAnnotations = result.annotations;
+              // Apply length annotations to request body
+              for (const [key, annotation] of Object.entries(bodyAnnotations)) {
+                if (annotation.startsWith('length:')) {
+                  const length = parseInt(annotation.replace('length:', '').trim());
+                  body[key] = 'x'.repeat(length);
+                }
+              }
+              idx = result.endIdx;
+            }
+          } else {
+            idx++;
           }
         }
 

@@ -328,4 +328,57 @@ And that's how you create a user.
     const tests = parseMarkdownSpec(md);
     expect(tests[0].steps[0].status).toBe(404);
   });
+
+  // ──────────────────────────────────────
+  // Headers block ordering: before OR after Request
+  // ──────────────────────────────────────
+
+  it('accepts **Headers** after **Request** (HTTP message order)', () => {
+    const md = `# API
+
+## Remove auth
+
+**Request** → \`GET /v1/protected\`
+
+**Headers**
+
+\`\`\`http
+Authorization:
+X-Custom: injected
+\`\`\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const tests = parseMarkdownSpec(md);
+    const step = tests[0].steps[0];
+    // Headers after Request should apply to THIS step (same as if before)
+    expect(step.headers['Authorization']).toBe('');
+    expect(step.headers['X-Custom']).toBe('injected');
+  });
+
+  it('headers after request do not bleed into next step', () => {
+    const md = `# API
+
+## Step 1
+
+**Request** → \`GET /v1/a\`
+
+**Headers**
+
+\`\`\`http
+X-Step: one
+\`\`\`
+
+**Response** → \`🟢 200 OK\`
+
+## Step 2
+
+**Request** → \`GET /v1/b\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const tests = parseMarkdownSpec(md);
+    expect(tests[0].steps[0].headers['X-Step']).toBe('one');
+    expect(tests[1].steps[0].headers['X-Step']).toBeUndefined();
+  });
 });
