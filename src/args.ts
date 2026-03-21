@@ -11,6 +11,7 @@ export interface CliOptions {
   config: SpecConfig;
   filter: string | null;
   baseOverridden: boolean;
+  databaseOverridden: boolean;
   verbose: boolean;
 }
 
@@ -21,6 +22,8 @@ export function parseArgs(args: string[]): CliOptions {
   let filter: string | null = null;
   let base = 'http://localhost:3000';
   let baseOverridden = false;
+  let database: string | undefined;
+  let databaseOverridden = false;
 
   let verbose = false;
 
@@ -35,6 +38,10 @@ export function parseArgs(args: string[]): CliOptions {
       i += 2;
     } else if (args[i] === '--test' && args[i + 1]) {
       filter = args[i + 1];
+      i += 2;
+    } else if (args[i] === '--database' && args[i + 1]) {
+      database = args[i + 1];
+      databaseOverridden = true;
       i += 2;
     } else if (args[i] === '--verbose') {
       verbose = true;
@@ -52,7 +59,8 @@ export function parseArgs(args: string[]): CliOptions {
       base,
       headers: {},
     },
+    ...(database !== undefined ? { sql: { database } } : {}),
   };
 
-  return { command, targets, format, config, filter, baseOverridden, verbose };
+  return { command, targets, format, config, filter, baseOverridden, databaseOverridden, verbose };
 }

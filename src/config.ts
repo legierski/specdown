@@ -48,17 +48,22 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
     return {};
   }
 
-  if (!parsed.http) return {};
+  if (!parsed.http && !parsed.sql) return {};
 
-  const result: Partial<SpecConfig> = {
-    http: {
+  const result: Partial<SpecConfig> = {};
+
+  if (parsed.http) {
+    result.http = {
       base: parsed.http.base || '',
       headers: parsed.http.headers ? { ...parsed.http.headers } : {},
-    },
-  };
+    };
+    if (parsed.http.timeout !== undefined) {
+      result.http.timeout = parsed.http.timeout;
+    }
+  }
 
-  if (parsed.http.timeout !== undefined) {
-    result.http!.timeout = parsed.http.timeout;
+  if (parsed.sql?.database) {
+    result.sql = { database: parsed.sql.database };
   }
 
   return result;
@@ -78,7 +83,7 @@ export function parseConfigFile(filePath: string): SpecConfig {
   const content = readFileSync(filePath, 'utf-8');
   const partial = parseTomlConfig(content);
 
-  if (!partial.http) {
+  if (!partial.http && !partial.sql) {
     return defaultConfig();
   }
 
@@ -108,6 +113,13 @@ export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): Sp
         merged.http.headers[key] = value;
       }
     }
+  }
+
+  // Merge sql: child overrides parent
+  if (child.sql?.database) {
+    merged.sql = { database: child.sql.database };
+  } else if (parent.sql) {
+    merged.sql = { ...parent.sql };
   }
 
   return merged;
@@ -145,7 +157,7 @@ export function resolveConfig(dir: string): SpecConfig {
   for (let i = 1; i < configFiles.length; i++) {
     const content = readFileSync(configFiles[i], 'utf-8');
     const partial = parseTomlConfig(content);
-    if (partial.http) {
+    if (partial.http || partial.sql) {
       config = mergeConfigs(config, partial);
     }
   }

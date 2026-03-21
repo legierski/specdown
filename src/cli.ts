@@ -29,18 +29,22 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help') {
-    console.log(`specdown — API documentation that tests itself.
+    console.log(`specdown — documentation that tests itself.
 
 Usage:
-  specdown run [file|dir]        Run spec files (default: docs/)
-  specdown check [file|dir]      Validate specs without HTTP (default: docs/)
-  specdown run --format json     Output results as JSON
-  specdown run --base URL        Set base URL (default: http://localhost:3000)
+  specdown run [file|dir]              Run spec files (default: docs/)
+  specdown check [file|dir]            Validate specs without execution (default: docs/)
+  specdown run --format json           Output results as JSON
+  specdown run --base URL              Set base URL (default: http://localhost:3000)
+  specdown run --database PATH         Set SQLite database path for SQL mode
+  specdown run --test "substring"      Filter tests by name
+  specdown run --verbose               Show full response body on failure
 
 Examples:
-  specdown run                   Run all .spec.md in docs/
-  specdown check api.spec.md     Validate a spec file
+  specdown run                         Run all .spec.md in docs/
+  specdown check api.spec.md           Validate a spec file
   specdown run docs/ --base http://localhost:8080
+  specdown run db.spec.md --database test.db
 `);
     process.exit(0);
   }
@@ -79,9 +83,12 @@ Examples:
       const markdown = readFileSync(file, 'utf-8');
       let fileConfig = resolveConfig(dirname(file));
       const fm = parseFrontmatter(markdown);
-      if (fm?.http) fileConfig = mergeConfigs(fileConfig, fm);
+      if (fm) fileConfig = mergeConfigs(fileConfig, fm);
       if (opts.baseOverridden) {
         fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
+      }
+      if (opts.databaseOverridden && opts.config.sql) {
+        fileConfig = mergeConfigs(fileConfig, { sql: opts.config.sql });
       }
 
       const result = checkSpec(stripFrontmatter(markdown), fileConfig);
@@ -111,11 +118,14 @@ Examples:
 
     let fileConfig = resolveConfig(dirname(file));
     const fm = parseFrontmatter(markdown);
-    if (fm?.http) {
+    if (fm) {
       fileConfig = mergeConfigs(fileConfig, fm);
     }
     if (opts.baseOverridden) {
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
+    }
+    if (opts.databaseOverridden && opts.config.sql) {
+      fileConfig = mergeConfigs(fileConfig, { sql: opts.config.sql });
     }
 
     const result = await runSpec(stripFrontmatter(markdown), fileConfig, opts.filter);

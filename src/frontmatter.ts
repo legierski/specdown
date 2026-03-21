@@ -36,6 +36,7 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
   let base: string | undefined;
   let timeout: number | undefined;
   let headers: Record<string, string> | undefined;
+  let database: string | undefined;
 
   let i = 0;
   while (i < fmLines.length) {
@@ -49,6 +50,9 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
       // parseInt intentionally truncates floats (99.5 → 99); this is fine for ms values
       const val = parseInt(line.slice('timeout:'.length).trim(), 10);
       if (!isNaN(val)) timeout = val;
+      i++;
+    } else if (line.startsWith('database:')) {
+      database = line.slice('database:'.length).trim();
       i++;
     } else if (line.startsWith('headers:')) {
       headers = {};
@@ -77,7 +81,7 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
       if (key && !line.startsWith(' ') && !line.startsWith('\t')) {
         if (!METADATA_FIELDS.has(key)) {
           process.stderr.write(
-            `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers)\n`
+            `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers, database)\n`
           );
         }
       }
@@ -85,14 +89,23 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
     }
   }
 
-  if (base === undefined && timeout === undefined && headers === undefined) return null;
+  if (base === undefined && timeout === undefined && headers === undefined && database === undefined) return null;
 
-  const http: any = {};
-  if (base !== undefined) http.base = base;
-  if (timeout !== undefined) http.timeout = timeout;
-  if (headers !== undefined) http.headers = headers;
+  const result: any = {};
 
-  return { http };
+  if (base !== undefined || timeout !== undefined || headers !== undefined) {
+    const http: any = {};
+    if (base !== undefined) http.base = base;
+    if (timeout !== undefined) http.timeout = timeout;
+    if (headers !== undefined) http.headers = headers;
+    result.http = http;
+  }
+
+  if (database !== undefined) {
+    result.sql = { database };
+  }
+
+  return result;
 }
 
 /**
