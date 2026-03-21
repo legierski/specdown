@@ -89,7 +89,7 @@ export function parseConfigFile(filePath: string): SpecConfig {
 
 /**
  * Merge two configs. Child overrides parent.
- * Header set to "none" in child removes it from the result.
+ * Header set to empty string "" in child removes it from the result.
  */
 export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): SpecConfig {
   const merged: SpecConfig = {
