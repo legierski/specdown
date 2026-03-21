@@ -388,6 +388,13 @@ specdown run api.spec.md --format json   # machine-readable JSON
 
 JSON output includes `passed`, `failed`, and `skipped` counts.
 
+## Known limitations
+
+- **Numeric patterns in JSON blocks**: Pattern values like `00` or `0000` must be quoted strings in JSON response/output blocks (`"count": "0000"`), not bare numbers (`"count": 0000`). Bare numeric patterns are invalid JSON and will crash the parser. Use `"any-text"` for fields where you don't care about the exact value, or use exact numbers for precise matching.
+- **Variable scope**: `$vars` are scoped per-test (step chain), not per-file. A variable saved in one `## Test` section is not available in another.
+- **Array annotations**: `// save as:` doesn't work inside array elements — only top-level object fields.
+- **No parallel execution**: Steps and tests run sequentially.
+
 ## License
 
 MIT
