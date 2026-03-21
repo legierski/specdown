@@ -14,11 +14,18 @@
     "build": "tsc",
     "lint": "tsc --noEmit"
   },
-  "keywords": ["api", "testing", "documentation", "markdown", "specdown"],
+  "keywords": [
+    "api",
+    "testing",
+    "documentation",
+    "markdown",
+    "specdown"
+  ],
   "author": "Peter Legierski",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   }
