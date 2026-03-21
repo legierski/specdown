@@ -3,6 +3,7 @@
  */
 
 import type { SpecResult } from './runner.js';
+import type { CheckResult } from './check.js';
 
 export const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 export const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -43,6 +44,37 @@ export function printSummary(
   const failedStr = failed > 0 ? red(`${failed} failed`) : `${failed} failed`;
   const filesStr = dim(`(${fileCount} file${fileCount === 1 ? '' : 's'})`);
   console.log(`\n${bold('Results:')} ${green(`${passed} passed`)}, ${failedStr}${skippedStr} ${filesStr}`);
+}
+
+/**
+ * Print `specdown check` output for one spec file.
+ * Returns true if the file has tests and no warnings; false otherwise.
+ */
+export function printCheckResult(file: string, result: CheckResult): boolean {
+  const relPath = file.replace(process.cwd() + '/', '');
+  const base = dim(`[${result.config.http.base}]`);
+
+  if (result.tests.length === 0) {
+    console.log(`\n${bold(relPath)} ${base}`);
+    console.log(`  ${red('⚠')} No tests found`);
+    for (const w of result.warnings) {
+      console.log(`    ${dim(w)}`);
+    }
+    return false;
+  }
+
+  console.log(`\n${bold(relPath)} ${base}`);
+  for (const t of result.tests) {
+    const steps = t.stepCount === 1 ? '1 step' : `${t.stepCount} steps`;
+    console.log(`  ${green('✓')} ${t.name} ${dim(`(${steps})`)}`);
+  }
+  if (result.warnings.length > 0) {
+    for (const w of result.warnings) {
+      console.log(`  ${red('⚠')} ${w}`);
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
