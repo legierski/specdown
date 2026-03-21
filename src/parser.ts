@@ -6,6 +6,7 @@
  */
 
 import { parseJsonWithAnnotations } from './json.js';
+import type { SpecConfig } from './config.js';
 
 export interface Step {
   headers: Record<string, string>;
@@ -202,4 +203,98 @@ export function parseMarkdownSpec(raw: string): Test[] {
   }
 
   return tests;
+}
+
+/**
+ * Parse a YAML frontmatter block at the top of a markdown file.
+ * Supports: base, timeout, headers (with indented key: value pairs).
+ * Returns null if no frontmatter, empty frontmatter, or no recognized fields.
+ */
+export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
+  const lines = markdown.split('\n');
+  if (lines[0] !== '---') return null;
+
+  // Find closing ---
+  let endLine = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') {
+      endLine = i;
+      break;
+    }
+  }
+  if (endLine === -1) return null;
+
+  const fmLines = lines.slice(1, endLine);
+  if (fmLines.every(l => !l.trim())) return null;
+
+  let base: string | undefined;
+  let timeout: number | undefined;
+  let headers: Record<string, string> | undefined;
+
+  let i = 0;
+  while (i < fmLines.length) {
+    const line = fmLines[i];
+    if (!line.trim()) { i++; continue; }
+
+    if (line.startsWith('base:')) {
+      base = line.slice('base:'.length).trim();
+      i++;
+    } else if (line.startsWith('timeout:')) {
+      const val = parseInt(line.slice('timeout:'.length).trim(), 10);
+      if (!isNaN(val)) timeout = val;
+      i++;
+    } else if (line.startsWith('headers:')) {
+      headers = {};
+      i++;
+      // Consume indented lines
+      while (i < fmLines.length && (fmLines[i].startsWith('  ') || fmLines[i].startsWith('\t'))) {
+        const headerLine = fmLines[i].trim();
+        const colonIdx = headerLine.indexOf(':');
+        if (colonIdx !== -1) {
+          const key = headerLine.slice(0, colonIdx).trim();
+          let value = headerLine.slice(colonIdx + 1).trim();
+          // Strip surrounding quotes
+          if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+          ) {
+            value = value.slice(1, -1);
+          }
+          headers[key] = value;
+        }
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+
+  if (base === undefined && timeout === undefined && headers === undefined) return null;
+
+  const http: any = {};
+  if (base !== undefined) http.base = base;
+  if (timeout !== undefined) http.timeout = timeout;
+  if (headers !== undefined) http.headers = headers;
+
+  return { http };
+}
+
+/**
+ * Remove the YAML frontmatter block from the top of a markdown string.
+ * Returns the markdown unchanged if no frontmatter is present.
+ */
+export function stripFrontmatter(markdown: string): string {
+  const lines = markdown.split('\n');
+  if (lines[0] !== '---') return markdown;
+
+  let endLine = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') {
+      endLine = i;
+      break;
+    }
+  }
+  if (endLine === -1) return markdown;
+
+  return lines.slice(endLine + 1).join('\n');
 }

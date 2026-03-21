@@ -14,6 +14,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { runSpec } from './runner.js';
 import { resolveConfig, mergeConfigs } from './config.js';
+import { parseFrontmatter, stripFrontmatter } from './parser.js';
 import type { SpecConfig } from './config.js';
 
 export interface CliOptions {
@@ -145,14 +146,19 @@ Try: specdown run api.spec.md  or  specdown run <directory>`);
   for (const file of allFiles) {
     const markdown = readFileSync(file, 'utf-8');
 
-    // Resolve config from .specdown files relative to this spec file
+    // Resolve config cascade: .specdown files → frontmatter → --base CLI flag
     let fileConfig = resolveConfig(dirname(file));
-    // CLI --base flag overrides .specdown config
+    // Apply frontmatter (higher priority than .specdown, lower than --base)
+    const fm = parseFrontmatter(markdown);
+    if (fm?.http) {
+      fileConfig = mergeConfigs(fileConfig, fm);
+    }
+    // CLI --base flag overrides everything
     if (opts.config.http.base !== 'http://localhost:3000') {
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
     }
 
-    const result = await runSpec(markdown, fileConfig);
+    const result = await runSpec(stripFrontmatter(markdown), fileConfig);
 
     totalPassed += result.passed;
     totalFailed += result.failed;
