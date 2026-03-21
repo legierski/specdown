@@ -17,7 +17,8 @@ import { resolveConfig, mergeConfigs } from './config.js';
 import { parseFrontmatter, stripFrontmatter } from './frontmatter.js';
 import { parseArgs } from './args.js';
 import { findSpecFiles } from './files.js';
-import { green, red, dim, bold } from './format.js';
+import { printPrettyResult, printSummary, printJsonResults } from './format.js';
+import type { SpecResult } from './runner.js';
 
 export { parseArgs } from './args.js';
 export { findSpecFiles } from './files.js';
@@ -48,7 +49,6 @@ Examples:
     process.exit(1);
   }
 
-  // Default to docs/ if no targets
   const usingDefault = opts.targets.length === 0;
   const targets = usingDefault ? ['docs'] : opts.targets;
 
@@ -70,19 +70,16 @@ Examples:
   let totalPassed = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
-  const jsonResults: any[] = [];
+  const jsonResults: Array<{ file: string } & SpecResult> = [];
 
   for (const file of allFiles) {
     const markdown = readFileSync(file, 'utf-8');
 
-    // Resolve config cascade: .specdown files → frontmatter → --base CLI flag
     let fileConfig = resolveConfig(dirname(file));
-    // Apply frontmatter (higher priority than .specdown, lower than --base)
     const fm = parseFrontmatter(markdown);
     if (fm?.http) {
       fileConfig = mergeConfigs(fileConfig, fm);
     }
-    // CLI --base flag overrides everything (use boolean flag, not value comparison)
     if (opts.baseOverridden) {
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
     }
@@ -94,49 +91,26 @@ Examples:
     totalSkipped += result.skipped;
 
     if (opts.format === 'json') {
-      jsonResults.push({
-        file,
-        ...result,
-      });
-    } else if (result.tests.length > 0) {
-      // Pretty output — skip files with zero matching tests when filtering
-      const relPath = file.replace(process.cwd() + '/', '');
-      console.log(`\n${bold(relPath)}`);
-      for (const test of result.tests) {
-        if (test.passed) {
-          console.log(`  ${green('✓')} ${test.name} ${dim(`(${test.duration}ms)`)}`);
-        } else {
-          console.log(`  ${red('✗')} ${test.name} ${dim(`(${test.duration}ms)`)}`);
-          for (const err of test.errors) {
-            console.log(`    ${red(err)}`);
-          }
-        }
-      }
+      jsonResults.push({ file, ...result });
+    } else {
+      printPrettyResult(file, result);
     }
   }
 
-  // Zero-match check: if a filter was given but nothing ran, that's an error
   if (opts.filter !== null && totalPassed === 0 && totalFailed === 0) {
     console.error(`No tests matched filter: "${opts.filter}"`);
     process.exit(1);
   }
 
   if (opts.format === 'json') {
-    console.log(JSON.stringify({
-      files: jsonResults,
-      passed: totalPassed,
-      failed: totalFailed,
-      skipped: totalSkipped,
-    }, null, 2));
+    printJsonResults(jsonResults, totalPassed, totalFailed, totalSkipped);
   } else {
-    const skippedStr = totalSkipped > 0 ? `, ${dim(`${totalSkipped} skipped`)}` : '';
-    console.log(`\n${bold('Results:')} ${green(`${totalPassed} passed`)}, ${totalFailed > 0 ? red(`${totalFailed} failed`) : `${totalFailed} failed`}${skippedStr} ${dim(`(${allFiles.length} file${allFiles.length === 1 ? '' : 's'})`)}`);
+    printSummary(totalPassed, totalFailed, totalSkipped, allFiles.length);
   }
 
   process.exit(totalFailed > 0 ? 1 : 0);
 }
 
-// Only run when executed directly (not when imported for testing)
 const isMainModule = process.argv[1]?.endsWith('/specdown') ||
   process.argv[1]?.endsWith('/cli.js') ||
   process.argv[1]?.endsWith('/cli.ts');
