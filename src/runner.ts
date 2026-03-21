@@ -5,13 +5,13 @@
  * and validates responses against expected values.
  */
 
-import { parseMarkdownSpec, type Step, type HttpStep, type CliStep, type SqlStep } from './parser.js';
+import { parseMarkdownSpec } from './parser.js';
+import type { Step, HttpStep, CliStep, SqlStep, SpecConfig } from './types.js';
 import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
 import { analyzeVarChain } from './analyze.js';
 import { execCommand } from './exec.js';
 import { execSql } from './sql.js';
-import type { SpecConfig } from './config.js';
 
 export interface FailedStepContext {
   /** 0-based index of the step that failed. */

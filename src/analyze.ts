@@ -6,7 +6,7 @@
  * No HTTP requests are made — pure parse-tree analysis.
  */
 
-import type { Test } from './parser.js';
+import type { Test } from './types.js';
 
 /** Extract all $varName references from a string. Returns variable names (without $). */
 function extractVarRefs(s: string): string[] {
