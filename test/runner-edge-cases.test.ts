@@ -838,6 +838,52 @@ false
     expect(result.warnings.some(w => w.includes('$id'))).toBe(true);
   });
 
+  it('substitutes variables in step headers', async () => {
+    // Step 1 saves a token from the response.
+    // Step 2 uses $token in a **Headers** block.
+    // BUG: step headers were assigned raw (headers[key] = value) without
+    //   substituteVars(), so "$token" was sent as a literal string.
+    const md = `# API
+
+## Use saved token in header
+
+**Request** → \`POST /v1/chain\`
+
+\`\`\`json
+{"name": "Test"}
+\`\`\`
+
+**Response** → \`🟢 201 Created\`
+
+\`\`\`json
+{
+  "id": "ch_xxxxxxxxxxxx",  // save as: $token
+  "name": "Test"
+}
+\`\`\`
+
+**Headers**
+
+\`\`\`http
+Authorization: Bearer $token
+\`\`\`
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+
+\`\`\`json
+{
+  "auth": "Bearer ch_aabbccddee11"
+}
+\`\`\`
+`;
+    const result = await runSpec(md, {
+      http: { base: `http://localhost:${port}`, headers: {} },
+    });
+    expect(result.passed).toBe(1);
+  });
+
   it('does not time out when timeout is large enough', async () => {
     const md = `# API
 

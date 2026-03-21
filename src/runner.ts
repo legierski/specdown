@@ -59,12 +59,13 @@ async function executeStep(
   const errors: string[] = [];
 
   // Build request headers: config defaults + step overrides
+  // Apply variable substitution to header values so $token etc. work.
   const headers: Record<string, string> = { ...config.http.headers };
   for (const [key, value] of Object.entries(step.headers)) {
     if (value === '') {
       delete headers[key];
     } else {
-      headers[key] = value;
+      headers[key] = substituteVars(value, vars);
     }
   }
 
