@@ -11,6 +11,7 @@ export interface CliOptions {
   config: SpecConfig;
   filter: string | null;
   baseOverridden: boolean;
+  verbose: boolean;
 }
 
 export function parseArgs(args: string[]): CliOptions {
@@ -20,6 +21,8 @@ export function parseArgs(args: string[]): CliOptions {
   let filter: string | null = null;
   let base = 'http://localhost:3000';
   let baseOverridden = false;
+
+  let verbose = false;
 
   let i = 1;
   while (i < args.length) {
@@ -33,6 +36,9 @@ export function parseArgs(args: string[]): CliOptions {
     } else if (args[i] === '--test' && args[i + 1]) {
       filter = args[i + 1];
       i += 2;
+    } else if (args[i] === '--verbose') {
+      verbose = true;
+      i++;
     } else if (!args[i].startsWith('-')) {
       targets.push(args[i]);
       i++;
@@ -48,5 +54,5 @@ export function parseArgs(args: string[]): CliOptions {
     },
   };
 
-  return { command, targets, format, config, filter, baseOverridden };
+  return { command, targets, format, config, filter, baseOverridden, verbose };
 }

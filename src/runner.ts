@@ -10,11 +10,27 @@ import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
 import type { SpecConfig } from './config.js';
 
+export interface FailedStepContext {
+  /** 0-based index of the step that failed. */
+  stepIndex: number;
+  /** Total number of steps in the test. */
+  stepCount: number;
+  method: string;
+  /** Request path after variable substitution. */
+  path: string;
+  /** Actual HTTP status code received. */
+  status: number;
+  /** Parsed response body, or null if body was not parsed (e.g. status mismatch). */
+  actualBody: any;
+}
+
 export interface TestResult {
   name: string;
   passed: boolean;
   errors: string[];
   duration: number;
+  /** Present on failing tests; absent on passing tests. */
+  failedStep?: FailedStepContext;
 }
 
 export interface SpecResult {
@@ -48,8 +64,10 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
     const testStart = Date.now();
     const errors: string[] = [];
     const vars: Record<string, string> = {};
+    let failedStep: FailedStepContext | undefined;
 
-    for (const step of test.steps) {
+    for (let stepIndex = 0; stepIndex < test.steps.length; stepIndex++) {
+      const step = test.steps[stepIndex];
       // Build headers: config defaults + step overrides
       const headers: Record<string, string> = { ...config.http.headers };
       for (const [key, value] of Object.entries(step.headers)) {
@@ -102,12 +120,14 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           } else {
             errors.push(`Request failed: ${err.message}`);
           }
+          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: 0, actualBody: null };
           break;
         }
 
         // Check status code
         if (res.status !== step.status) {
           errors.push(`Expected status ${step.status}, got ${res.status}`);
+          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
           break; // Stop chain on status mismatch
         }
 
@@ -132,7 +152,10 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
               break;
             }
           }
-          if (errors.length > 0) break;
+          if (errors.length > 0) {
+            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
+            break;
+          }
         }
 
         // Check response body if expected — signal still armed, covers slow body delivery
@@ -146,11 +169,13 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
             } else {
               errors.push('Expected JSON response body but could not parse');
             }
+            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
             break;
           }
           const matchErrors = matchResponse(actual, step.response, step.responseAnnotations, vars);
           if (matchErrors.length > 0) {
             errors.push(...matchErrors);
+            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: actual };
             break;
           }
         }
@@ -160,6 +185,9 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
         } else {
           errors.push(`Request failed: ${err.message}`);
+        }
+        if (!failedStep) {
+          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: 0, actualBody: null };
         }
         break;
       } finally {
@@ -172,6 +200,7 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
       name: test.name,
       passed: errors.length === 0,
       errors,
+      ...(failedStep !== undefined ? { failedStep } : {}),
       duration: Date.now() - testStart,
     });
   }

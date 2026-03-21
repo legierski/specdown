@@ -23,4 +23,12 @@ describe('parseArgs — smoke tests', () => {
   it('collects positional targets', () => {
     expect(parseArgs(['run', 'a.spec.md', 'b.spec.md']).targets).toEqual(['a.spec.md', 'b.spec.md']);
   });
+
+  it('parses --verbose flag', () => {
+    expect((parseArgs(['run', '--verbose']) as any).verbose).toBe(true);
+  });
+
+  it('verbose defaults to false when --verbose not passed', () => {
+    expect((parseArgs(['run', 'file.spec.md']) as any).verbose).toBe(false);
+  });
 });

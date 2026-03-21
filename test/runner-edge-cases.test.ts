@@ -602,6 +602,123 @@ Authorization: none
     expect(result.tests[0].errors[0]).toMatch(/timeout|timed out/i);
   }, 2000);
 
+  // ── failedStep context (v0.6) ──
+
+  it('passing test has failedStep undefined', async () => {
+    const md = `# API\n\n## Pass\n\n**Request** → \`GET /v1/missing\`\n\n**Response** → \`🔴 404 Not Found\`\n`;
+    const result = await runSpec(md, config());
+    expect(result.tests[0].passed).toBe(true);
+    expect((result.tests[0] as any).failedStep).toBeUndefined();
+  });
+
+  it('single-step status mismatch populates failedStep with correct fields', async () => {
+    const md = `# API\n\n## Fails\n\n**Request** → \`GET /v1/missing\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step).toBeDefined();
+    expect(step.stepIndex).toBe(0);
+    expect(step.stepCount).toBe(1);
+    expect(step.method).toBe('GET');
+    expect(step.path).toBe('/v1/missing');
+    expect(step.status).toBe(404); // actual, not expected (200)
+  });
+
+  it('field mismatch sets failedStep.actualBody to parsed response', async () => {
+    const md = `# API\n\n## Bad field\n\n**Request** → \`GET /v1/missing\`\n\n**Response** → \`🔴 404 Not Found\`\n\`\`\`json\n{"error": "wrong_message"}\n\`\`\`\n`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step).toBeDefined();
+    expect(step.actualBody).toEqual({ error: 'not found' });
+  });
+
+  it('multi-step: step 2 fails sets failedStep.stepIndex=1 stepCount=2', async () => {
+    const md = `# API
+
+## Two steps
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+
+**Request** → \`GET /v1/missing\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step.stepIndex).toBe(1);
+    expect(step.stepCount).toBe(2);
+  });
+
+  it('stepCount reflects total steps in test even when chain stops early', async () => {
+    const md = `# API
+
+## Three steps fail at 2
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+
+**Request** → \`GET /v1/missing\`
+
+**Response** → \`🟢 200 OK\`
+
+**Request** → \`GET /v1/echo-headers\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step.stepIndex).toBe(1);
+    expect(step.stepCount).toBe(3);
+  });
+
+  it('failedStep.path shows substituted variable not literal $var', async () => {
+    const md = `# API
+
+## Chain with variable fail
+
+**Request** → \`POST /v1/chain\`
+
+\`\`\`json
+{"name": "Test"}
+\`\`\`
+
+**Response** → \`🟢 201 Created\`
+
+\`\`\`json
+{
+  "id": "ch_xxxxxxxxxxxx",  // save as: $chain_id
+  "name": "Test"
+}
+\`\`\`
+
+**Request** → \`GET /v1/chain/$chain_id\`
+
+**Response** → \`🔴 404 Not Found\`
+`;
+    const result = await runSpec(md, config());
+    // Step 2 gets 200 (server returns the chain item), not 404 — status mismatch
+    const step = (result.tests[0] as any).failedStep;
+    expect(step).toBeDefined();
+    expect(step.path).toBe('/v1/chain/ch_aabbccddee11');
+    expect(step.path).not.toContain('$');
+  });
+
+  it('status mismatch sets failedStep.actualBody to null (no body parse on early break)', async () => {
+    const md = `# API\n\n## Status fail\n\n**Request** → \`GET /v1/missing\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step.actualBody).toBeNull();
+  });
+
+  it('failedStep.status is actual HTTP status received, not the expected status', async () => {
+    const md = `# API\n\n## Wrong status\n\n**Request** → \`GET /v1/error\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const result = await runSpec(md, config());
+    const step = (result.tests[0] as any).failedStep;
+    expect(step.status).toBe(500); // server returns 500, spec expects 200
+  });
+
   it('does not time out when timeout is large enough', async () => {
     const md = `# API
 

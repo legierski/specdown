@@ -127,7 +127,7 @@ Examples:
     if (opts.format === 'json') {
       jsonResults.push({ file, ...result });
     } else {
-      printPrettyResult(file, result);
+      printPrettyResult(file, result, opts.verbose);
     }
   }
 

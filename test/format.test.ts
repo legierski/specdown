@@ -92,6 +92,115 @@ describe('printSummary', () => {
   });
 });
 
+// ── printPrettyResult — step context (v0.6) ──
+
+describe('printPrettyResult — failedStep context', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function makeStepResult(failedStep?: Record<string, any>): SpecResult {
+    return {
+      tests: [{
+        name: 'Test foo',
+        passed: false,
+        errors: ['Expected status 200, got 404'],
+        duration: 42,
+        ...(failedStep !== undefined ? { failedStep } : {}),
+      } as any],
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      duration: 42,
+      warnings: [],
+    } as any;
+  }
+
+  it('passing test does not show step context lines', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', {
+      tests: [{ name: 'Pass', passed: true, errors: [], duration: 5 } as any],
+      passed: 1, failed: 0, skipped: 0, duration: 5, warnings: [],
+    } as any);
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).not.toContain('Step');
+    expect(output).not.toContain('Response:');
+  });
+
+  it('failing test with no failedStep shows no step context', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult(undefined));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).not.toContain('Step');
+    expect(output).not.toContain('Response:');
+  });
+
+  it('failing test with failedStep shows Step N/M: METHOD path', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 404, actualBody: null,
+    }));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('Step 1/1: GET /v1/test');
+  });
+
+  it('failing test with failedStep shows Response: status', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 404, actualBody: null,
+    }));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('Response: 404');
+  });
+
+  it('shows Step 2/3 for multi-step failure at stepIndex 1', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult({
+      stepIndex: 1, stepCount: 3, method: 'POST', path: '/v1/users', status: 500, actualBody: null,
+    }));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('Step 2/3: POST /v1/users');
+  });
+
+  it('does NOT show body by default when JSON > 200 chars', () => {
+    const largeBody = { message: 'x'.repeat(300) };
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 200, actualBody: largeBody,
+    }));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).not.toContain('message');
+  });
+
+  it('shows body when verbose=true even for large response', () => {
+    const largeBody = { message: 'x'.repeat(300) };
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    (printPrettyResult as any)('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 200, actualBody: largeBody,
+    }), true);
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('message');
+  });
+
+  it('shows body automatically when JSON <= 200 chars (no verbose needed)', () => {
+    const smallBody = { ok: true, id: 'abc' };
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printPrettyResult('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 200, actualBody: smallBody,
+    }));
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('"id"');
+  });
+
+  it('does not show body when actualBody is null even with verbose', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    (printPrettyResult as any)('/f.spec.md', makeStepResult({
+      stepIndex: 0, stepCount: 1, method: 'GET', path: '/v1/test', status: 404, actualBody: null,
+    }), true);
+    const output = spy.mock.calls.map(c => c[0]).join('\n');
+    expect(output).toContain('Step 1/1');
+    expect(output).not.toContain('{');
+  });
+});
+
 // ── printJsonResults ──
 
 describe('printJsonResults', () => {
