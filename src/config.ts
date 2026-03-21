@@ -15,6 +15,9 @@ export interface SpecConfig {
     headers: Record<string, string>;
     timeout?: number;
   };
+  sql?: {
+    database: string;
+  };
 }
 
 /**

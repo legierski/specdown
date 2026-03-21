@@ -35,6 +35,8 @@ export function printPrettyResult(file: string, result: SpecResult, verbose = fa
         const total = fs.stepCount;
         if (fs.mode === 'cli') {
           console.log(`    ${dim(`Step ${n}/${total}: RUN ${fs.path}`)}`);
+        } else if (fs.mode === 'sql') {
+          console.log(`    ${dim(`Step ${n}/${total}: QUERY ${fs.path}`)}`);
         } else {
           console.log(`    ${dim(`Step ${n}/${total}: ${fs.method} ${fs.path}`)}`);
           console.log(`    ${dim(`Response: ${fs.status}`)}`);

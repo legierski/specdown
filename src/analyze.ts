@@ -53,7 +53,38 @@ export function analyzeVarChain(tests: Test[]): string[] {
       const stepNum = i + 1;
       const refs = new Set<string>();
 
-      if (step.mode === 'cli') {
+      if (step.mode === 'sql') {
+        // SQL step: check query for $var references
+        for (const name of extractVarRefs(step.query)) refs.add(name);
+
+        // Expected result — string values starting with $ at any depth
+        if (step.expectedResult !== null && step.expectedResult !== undefined) {
+          if (typeof step.expectedResult === 'object') {
+            collectResponseRefs(step.expectedResult, refs);
+          } else {
+            for (const name of extractVarRefs(String(step.expectedResult))) refs.add(name);
+          }
+        }
+
+        // resultAnnotations with "not: $var"
+        for (const annotation of Object.values(step.resultAnnotations)) {
+          const notMatch = annotation?.match(/^not:\s+\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (notMatch) refs.add(notMatch[1]);
+        }
+
+        // Check references
+        for (const name of refs) {
+          if (!defined.has(name)) {
+            warnings.push(`"${test.name}" — step ${stepNum}: $${name} is referenced but never saved`);
+          }
+        }
+
+        // Commit saves
+        for (const annotation of Object.values(step.resultAnnotations)) {
+          const saveMatch = annotation?.match(/^save as:\s*\$([a-zA-Z_][a-zA-Z0-9_]*)$/);
+          if (saveMatch) defined.add(saveMatch[1]);
+        }
+      } else if (step.mode === 'cli') {
         // CLI step: check command for $var references
         for (const name of extractVarRefs(step.command)) refs.add(name);
 

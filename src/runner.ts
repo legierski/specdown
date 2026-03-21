@@ -5,11 +5,12 @@
  * and validates responses against expected values.
  */
 
-import { parseMarkdownSpec, type Step, type HttpStep, type CliStep } from './parser.js';
+import { parseMarkdownSpec, type Step, type HttpStep, type CliStep, type SqlStep } from './parser.js';
 import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
 import { analyzeVarChain } from './analyze.js';
 import { execCommand } from './exec.js';
+import { execSql } from './sql.js';
 import type { SpecConfig } from './config.js';
 
 export interface FailedStepContext {
@@ -17,8 +18,8 @@ export interface FailedStepContext {
   stepIndex: number;
   /** Total number of steps in the test. */
   stepCount: number;
-  /** 'http' or 'cli' — determines which fields are meaningful. */
-  mode: 'http' | 'cli';
+  /** Step mode — determines which fields are meaningful. */
+  mode: 'http' | 'cli' | 'sql';
   method: string;
   /** Request path after variable substitution, or command for CLI steps. */
   path: string;
@@ -243,6 +244,63 @@ async function executeCliStep(
 }
 
 /**
+ * Execute a single SQL step: run query via sqlite3 CLI, check row count, match output.
+ * Mutates `vars` in-place when save-as annotations succeed.
+ */
+async function executeSqlStep(
+  step: SqlStep,
+  config: SpecConfig,
+  vars: Record<string, string>,
+  stepIndex: number,
+  stepCount: number,
+): Promise<{ errors: string[]; failedStep?: FailedStepContext }> {
+  const errors: string[] = [];
+  const query = substituteVars(step.query, vars);
+
+  const makeFailedStep = (body: any = null): FailedStepContext =>
+    ({ stepIndex, stepCount, mode: 'sql', method: 'QUERY', path: query, status: 0, actualBody: body });
+
+  // Check database config
+  if (!config.sql?.database) {
+    errors.push('No database configured — set sql.database in .specdown, frontmatter, or --database flag');
+    return { errors, failedStep: makeFailedStep() };
+  }
+
+  const result = execSql(config.sql.database, query, step.expectedType);
+
+  if (result.error) {
+    errors.push(`SQL error: ${result.error}`);
+    return { errors, failedStep: makeFailedStep() };
+  }
+
+  // Check row/affected count
+  if (step.expectedRows !== null) {
+    const actual = step.expectedType === 'affected' ? result.changes : result.rows.length;
+    const label = step.expectedType === 'affected' ? 'affected' : 'row';
+    if (actual !== step.expectedRows) {
+      errors.push(`Expected ${step.expectedRows} ${label}${step.expectedRows !== 1 ? 's' : ''}, got ${actual}`);
+      return { errors, failedStep: makeFailedStep(result.rows) };
+    }
+  }
+
+  // Match result JSON (if expected)
+  if (step.expectedResult !== null) {
+    // For single-row expectations (object, not array), match against first row
+    const actual = Array.isArray(step.expectedResult)
+      ? result.rows
+      : result.rows.length === 1 ? result.rows[0] : result.rows;
+
+    const matchErrors = matchResponse(actual, step.expectedResult, step.resultAnnotations, vars);
+    if (matchErrors.length > 0) {
+      errors.push(...matchErrors);
+      return { errors, failedStep: makeFailedStep(actual) };
+    }
+  }
+
+  return { errors };
+}
+
+/**
  * Dispatch step execution based on mode.
  */
 async function executeStep(
@@ -254,6 +312,9 @@ async function executeStep(
 ): Promise<{ errors: string[]; failedStep?: FailedStepContext }> {
   if (step.mode === 'cli') {
     return executeCliStep(step, config, vars, stepIndex, stepCount);
+  }
+  if (step.mode === 'sql') {
+    return executeSqlStep(step, config, vars, stepIndex, stepCount);
   }
   return executeHttpStep(step, config, vars, stepIndex, stepCount);
 }

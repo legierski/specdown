@@ -31,7 +31,16 @@ export interface CliStep {
   outputAnnotations: Record<string, string>;
 }
 
-export type Step = HttpStep | CliStep;
+export interface SqlStep {
+  mode: 'sql';
+  query: string;
+  expectedRows: number | null;
+  expectedType: 'rows' | 'affected' | null;
+  expectedResult: any;
+  resultAnnotations: Record<string, string>;
+}
+
+export type Step = HttpStep | CliStep | SqlStep;
 
 export interface Test {
   name: string;
@@ -95,6 +104,84 @@ export function parseMarkdownSpec(raw: string): ParseResult {
           currentHeaders = result.headers;
           idx = result.endIdx;
         }
+        continue;
+      }
+
+      // Query line (SQL mode)
+      if (line.includes('**Query**')) {
+        sectionHadRequest = true;
+
+        // Extract query: inline (`**Query** → `SQL``) or code block
+        let query: string | null = null;
+        const inlineMatch = line.match(/`(.+?)`/);
+        if (inlineMatch) {
+          query = inlineMatch[1];
+          idx++;
+        } else {
+          idx++;
+          while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
+          if (idx < lines.length) {
+            idx++; // skip opening ```sql or ```
+            const queryLines: string[] = [];
+            while (idx < lines.length && !lines[idx].startsWith('```')) {
+              queryLines.push(lines[idx]);
+              idx++;
+            }
+            if (idx < lines.length) idx++; // skip closing ```
+            query = queryLines.join('\n');
+          }
+        }
+
+        if (!query) {
+          warnings.push(`"${name}" — Query line has no SQL (step skipped)`);
+          continue;
+        }
+
+        // Find Result line
+        while (idx < lines.length && !lines[idx].includes('**Result**')) idx++;
+
+        let expectedRows: number | null = null;
+        let expectedType: 'rows' | 'affected' | null = null;
+        let expectedResult: any = null;
+        let resultAnnotations: Record<string, string> = {};
+
+        if (idx < lines.length) {
+          const resultLine = lines[idx];
+          const rowMatch = resultLine.match(/(\d+)\s+rows?/);
+          const affectedMatch = resultLine.match(/(\d+)\s+affected/);
+          if (rowMatch) {
+            expectedRows = parseInt(rowMatch[1]);
+            expectedType = 'rows';
+          } else if (affectedMatch) {
+            expectedRows = parseInt(affectedMatch[1]);
+            expectedType = 'affected';
+          }
+          idx++;
+
+          // Look for result block (JSON)
+          while (idx < lines.length && lines[idx].trim() === '') idx++;
+          if (idx < lines.length && lines[idx].startsWith('```')) {
+            const isJson = lines[idx].includes('json');
+            if (isJson) {
+              const result = extractJsonBlock(lines, idx);
+              if (result) {
+                expectedResult = result.data;
+                resultAnnotations = result.annotations;
+                idx = result.endIdx;
+              }
+            }
+          }
+        }
+
+        steps.push({
+          mode: 'sql',
+          query,
+          expectedRows,
+          expectedType,
+          expectedResult,
+          resultAnnotations,
+        });
+
         continue;
       }
 
@@ -308,7 +395,7 @@ export function parseMarkdownSpec(raw: string): ParseResult {
       tests.push({ name, steps });
     } else if (!sectionHadRequest) {
       // Section had no Request or Run lines at all — warn about prose-only sections
-      warnings.push(`"${name}" — section has no Request or Run lines (no tests generated)`);
+      warnings.push(`"${name}" — section has no Request, Run, or Query lines (no tests generated)`);
     }
   }
 
