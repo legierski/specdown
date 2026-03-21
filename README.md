@@ -14,6 +14,8 @@ npm install -g specdown
 specdown run api.spec.md
 specdown run docs/
 specdown run api.spec.md --base http://localhost:8080
+specdown run docs/ --test "create user"
+specdown run api.spec.md --format json
 ```
 
 ## Spec file format
@@ -61,6 +63,41 @@ A spec file is a markdown file with `## H2` headings as test cases. Each test ca
 
 **Variable substitution:** `$user_id` in paths and request bodies is replaced with the captured value.
 
+### Response header assertions
+
+Assert response headers using a `**Response Headers**` block between the status line and optional body:
+
+````markdown
+## Create a user
+
+**Request** → `POST /v1/users`
+
+```json
+{"name": "Alice"}
+```
+
+**Response** → `🟢 201 Created`
+
+**Response Headers**
+
+```http
+Content-Type: application/json
+X-Request-Id: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+```json
+{"id": "usr_xxxxxxxxxxxx"}
+```
+````
+
+Header names are matched case-insensitively (RFC 7230). Header values use the same pattern matching as response bodies (`xx`, `00` placeholders).
+
+**Gotcha:** The full header value must match. If your server sends `Content-Type: application/json; charset=utf-8`, asserting `Content-Type: application/json` will fail. Use a pattern to cover the variable suffix:
+
+```http
+Content-Type: application/json; charset=xxxxx
+```
+
 ## Config
 
 Create a `.specdown` file in your project root (TOML format):
@@ -77,7 +114,30 @@ Content-Type = "application/json"
 
 Config files cascade: a `.specdown` in a subdirectory merges with the root config, with the subdirectory taking precedence.
 
-To remove an inherited header for a specific request, set it to an empty value:
+### Per-file config (frontmatter)
+
+Add a YAML frontmatter block at the top of a spec file to override config for that file only:
+
+```markdown
+---
+base: http://staging.api.com
+timeout: 10000
+headers:
+  Authorization: Bearer staging_token
+  X-Version: "2"
+---
+
+# Users API
+...
+```
+
+Supported fields: `base`, `timeout`, `headers`. Unknown fields emit a warning.
+
+Frontmatter merges with `.specdown` config (frontmatter wins per-key). The `--base` CLI flag overrides frontmatter base (but not headers or timeout).
+
+### Removing inherited headers
+
+To remove a config header for a specific request, set it to an empty value:
 
 ```markdown
 **Headers**
@@ -87,7 +147,18 @@ Authorization:
 ```
 ```
 
-This removes `Authorization` from that step only. Headers set in config still apply to all other steps.
+This removes `Authorization` from that step only.
+
+## Filtering tests
+
+Run only tests whose name contains a substring (case-insensitive):
+
+```bash
+specdown run docs/ --test "create"
+specdown run api.spec.md --test "health check"
+```
+
+If no tests match, specdown exits 1 with an error. The results summary shows how many tests were skipped.
 
 ## Output formats
 
@@ -95,6 +166,8 @@ This removes `Authorization` from that step only. Headers set in config still ap
 specdown run api.spec.md                 # pretty (default)
 specdown run api.spec.md --format json   # machine-readable JSON
 ```
+
+JSON output includes `passed`, `failed`, and `skipped` counts.
 
 ## License
 
