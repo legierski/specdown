@@ -77,6 +77,18 @@ Content-Type = "application/json"
 
 Config files cascade: a `.specdown` in a subdirectory merges with the root config, with the subdirectory taking precedence.
 
+To remove an inherited header for a specific request, set it to an empty value:
+
+```markdown
+**Headers**
+
+```http
+Authorization:
+```
+```
+
+This removes `Authorization` from that step only. Headers set in config still apply to all other steps.
+
 ## Output formats
 
 ```bash
