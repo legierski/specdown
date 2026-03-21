@@ -2,10 +2,14 @@
  * YAML frontmatter parser for specdown spec files.
  *
  * Hand-rolled; no js-yaml dependency. Supports: base, timeout, headers.
- * Unknown keys emit a stderr warning so typos don't silently do nothing.
+ * Recognizes common metadata fields (title, author, description) without warning.
+ * Genuinely unknown keys emit a stderr warning so typos don't silently do nothing.
  */
 
 import type { SpecConfig } from './config.js';
+
+/** Common metadata fields that don't affect spec execution but shouldn't trigger warnings. */
+const METADATA_FIELDS = new Set(['title', 'author', 'description']);
 
 /**
  * Parse a YAML frontmatter block at the top of a markdown file.
@@ -68,12 +72,14 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
         i++;
       }
     } else {
-      // Unknown top-level key — warn so typos like "base_url" don't silently do nothing
+      // Check top-level key — warn for typos, but silently ignore common metadata fields
       const key = line.split(':')[0].trim();
       if (key && !line.startsWith(' ') && !line.startsWith('\t')) {
-        process.stderr.write(
-          `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers)\n`
-        );
+        if (!METADATA_FIELDS.has(key)) {
+          process.stderr.write(
+            `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers)\n`
+          );
+        }
       }
       i++;
     }

@@ -67,6 +67,33 @@ describe('parseFrontmatter', () => {
     expect(fm).toBeNull();
   });
 
+  it('does not warn for common metadata fields (title, author, description)', () => {
+    const warnings: string[] = [];
+    const origWrite = process.stderr.write;
+    process.stderr.write = ((chunk: any) => { warnings.push(String(chunk)); return true; }) as any;
+    try {
+      const md = `---\ntitle: My API\nauthor: Alice\ndescription: A cool API\n---\n\n# API\n`;
+      parseFrontmatter(md);
+      expect(warnings).toEqual([]);
+    } finally {
+      process.stderr.write = origWrite;
+    }
+  });
+
+  it('still warns for genuinely unknown fields', () => {
+    const warnings: string[] = [];
+    const origWrite = process.stderr.write;
+    process.stderr.write = ((chunk: any) => { warnings.push(String(chunk)); return true; }) as any;
+    try {
+      const md = `---\nbase_url: http://example.com\n---\n\n# API\n`;
+      parseFrontmatter(md);
+      expect(warnings.length).toBe(1);
+      expect(warnings[0]).toContain('base_url');
+    } finally {
+      process.stderr.write = origWrite;
+    }
+  });
+
   it('ignores frontmatter that is not at the top of the file', () => {
     const md = `# API\n\nSome text.\n\n---\nbase: http://sneaky.com\n---\n`;
     expect(parseFrontmatter(md)).toBeNull();
