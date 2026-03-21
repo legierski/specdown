@@ -133,10 +133,11 @@ afterAll(async () => {
   if (existsSync(TMP)) rmSync(TMP, { recursive: true });
 });
 
-async function runCLI(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function runCLI(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
     const { stdout, stderr } = await execFileAsync('node', [CLI, ...args], {
       timeout: 10000,
+      cwd,
     });
     return { stdout, stderr, exitCode: 0 };
   } catch (err: any) {
@@ -246,5 +247,18 @@ describe('built CLI binary', () => {
       '--base', `http://localhost:${port}`,
     ]);
     expect(exitCode).toBe(1);
+  });
+
+  it('shows helpful error when run with no args and docs/ does not exist', async () => {
+    // Run from a temp dir that has no docs/ subdirectory
+    const noDocsDir = join(TMP, 'nodocs');
+    mkdirSync(noDocsDir, { recursive: true });
+
+    const { stdout, stderr, exitCode } = await runCLI(['run', '--base', `http://localhost:${port}`], noDocsDir);
+    expect(exitCode).toBe(1);
+    const output = stdout + stderr;
+    // Should mention docs/ and give actionable guidance — not just "does not exist"
+    expect(output).toMatch(/docs\//);
+    expect(output).toMatch(/specdown run/);
   });
 });

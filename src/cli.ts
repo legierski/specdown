@@ -121,7 +121,15 @@ Examples:
   }
 
   // Default to docs/ if no targets
-  const targets = opts.targets.length > 0 ? opts.targets : ['docs'];
+  const usingDefault = opts.targets.length === 0;
+  const targets = usingDefault ? ['docs'] : opts.targets;
+
+  if (usingDefault && !existsSync(resolve('docs'))) {
+    console.error(`Error: no spec files specified and default directory 'docs/' does not exist.
+Try: specdown run api.spec.md  or  specdown run <directory>`);
+    process.exit(1);
+  }
+
   const allFiles: string[] = [];
   for (const t of targets) {
     allFiles.push(...findSpecFiles(t));
