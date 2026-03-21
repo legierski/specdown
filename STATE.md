@@ -1,6 +1,6 @@
 # specdown — project state
 
-Last updated: v0.7.0
+Last updated: v0.8.1
 
 ## Version history
 
@@ -13,6 +13,8 @@ Last updated: v0.7.0
 | v0.5.0  | `specdown check` (dry-run parse validation); parser warnings surface silently-dropped steps; cli.ts split into args.ts / files.ts / format.ts |
 | v0.6.0  | `FailedStepContext` on TestResult (stepIndex, stepCount, method, path, status, actualBody); step context in pretty output; `--verbose` flag; `makeFailedStep` helper extracted |
 | v0.7.0  | Variable chain validation in `specdown check`; `src/analyze.ts` with `analyzeVarChain()`; false-positive guard for `$100`/`$99` |
+| v0.8.0  | Fix 4 Kai-audit bugs: falsey body/response skipped (`!== null`), default base corrected, partial root config preserved, var-chain warnings in `runSpec` |
+| v0.8.1  | Fix duplicate response header overwrite (accumulate `string[]`); 3 external audit tests (CRLF, Set-Cookie, colon-in-value) |
 
 ## Source modules
 
@@ -34,7 +36,7 @@ Last updated: v0.7.0
 | `index.ts` | Public library exports |
 | `json.ts` | JSON annotation parsing helpers |
 
-## Test files (26 total, 435 tests)
+## Test files (26 total, 449 tests)
 
 Each source module has a corresponding test file (enforced by pre-commit hook):
 `test/${basename}.test.ts` or `test/${basename}-edge-cases.test.ts`
@@ -45,7 +47,7 @@ Each source module has a corresponding test file (enforced by pre-commit hook):
 - Matcher: on `save as:` match, writes `vars[$name] = actual[key]`
 - Runner: `substituteVars(path, vars)` + `substituteVars(body, vars)` before each step
 - Runner: `vars` dict scoped per-test, reset between tests
-- Check: does **not** validate variable chain coherence (known gap — deferred from v0.5)
+- Check + Run: both call `analyzeVarChain()` — warnings surface in both modes (fixed v0.8.0)
 
 ## Known gaps
 
