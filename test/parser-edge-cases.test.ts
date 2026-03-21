@@ -536,3 +536,57 @@ Authorization: Bearer abc:def:ghi
     expect(tests[0].steps[0].body).toBeNull();
   });
 });
+
+// ── CRLF and trailing spaces robustness (audit) ──
+
+describe('parser — CRLF line endings and trailing whitespace', () => {
+  it('parses a spec file with CRLF line endings without dropping the step', () => {
+    // Simulate a Windows file: every line ending is \r\n
+    const md = '# API\r\n\r\n## Get users\r\n\r\n**Request** → `GET /v1/users`\r\n\r\n**Response** → `🟢 200 OK`\r\n';
+    const { tests, warnings } = parseMarkdownSpec(md);
+    expect(tests).toHaveLength(1);
+    expect(tests[0].name).toBe('Get users');
+    expect(tests[0].steps).toHaveLength(1);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('CRLF: parses method and path correctly (no \\r in path)', () => {
+    const md = '# API\r\n\r\n## Test\r\n\r\n**Request** → `GET /v1/ping`\r\n\r\n**Response** → `🟢 200 OK`\r\n';
+    const { tests } = parseMarkdownSpec(md);
+    expect(tests[0].steps[0].method).toBe('GET');
+    expect(tests[0].steps[0].path).toBe('/v1/ping'); // no trailing \r
+  });
+
+  it('trailing spaces after closing backtick on Request line does not drop the step', () => {
+    // Real files from some editors add trailing spaces
+    const md = '# API\n\n## Test\n\n**Request** → `GET /v1/ping`   \n\n**Response** → `🟢 200 OK`\n';
+    const { tests, warnings } = parseMarkdownSpec(md);
+    expect(tests).toHaveLength(1);
+    expect(tests[0].steps).toHaveLength(1);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('CRLF: multi-step spec parses all steps', () => {
+    const md = [
+      '# API',
+      '',
+      '## Chain',
+      '',
+      '**Request** → `POST /v1/items`',
+      '',
+      '```json',
+      '{"name": "test"}',
+      '```',
+      '',
+      '**Response** → `🟢 201 Created`',
+      '',
+      '**Request** → `GET /v1/items`',
+      '',
+      '**Response** → `🟢 200 OK`',
+    ].join('\r\n');
+    const { tests } = parseMarkdownSpec(md);
+    expect(tests[0].steps).toHaveLength(2);
+    expect(tests[0].steps[0].method).toBe('POST');
+    expect(tests[0].steps[1].method).toBe('GET');
+  });
+});

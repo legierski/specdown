@@ -143,21 +143,30 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
 
         // Check response headers if asserted
         if (step.responseHeaders && Object.keys(step.responseHeaders).length > 0) {
-          // Build a lowercase-keyed map of actual response headers for case-insensitive lookup
-          const actualHeaders: Record<string, string> = {};
+          // Build a lowercase-keyed map of actual response headers for case-insensitive lookup.
+          // Accumulate duplicate headers (e.g. Set-Cookie) as arrays so the first value is not
+          // overwritten by subsequent values (which forEach visits in order).
+          const actualHeaders: Record<string, string[]> = {};
           res.headers.forEach((value, name) => {
-            actualHeaders[name.toLowerCase()] = value;
+            const key = name.toLowerCase();
+            if (actualHeaders[key] === undefined) {
+              actualHeaders[key] = [value];
+            } else {
+              actualHeaders[key].push(value);
+            }
           });
 
           for (const [assertedName, assertedValue] of Object.entries(step.responseHeaders)) {
-            const actual = actualHeaders[assertedName.toLowerCase()];
-            if (actual === undefined) {
+            const actuals = actualHeaders[assertedName.toLowerCase()];
+            if (actuals === undefined) {
               errors.push(`Response header missing: ${assertedName}`);
               break;
             }
-            if (!matchesPattern(assertedValue, actual)) {
+            // Pass if any of the accumulated values matches (handles duplicate headers)
+            const anyMatch = actuals.some(v => matchesPattern(assertedValue, v));
+            if (!anyMatch) {
               errors.push(
-                `Response header mismatch: ${assertedName}\n  expected: ${assertedValue}\n  actual:   ${actual}`
+                `Response header mismatch: ${assertedName}\n  expected: ${assertedValue}\n  actual:   ${actuals.join(', ')}`
               );
               break;
             }

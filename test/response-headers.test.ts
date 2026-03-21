@@ -149,6 +149,27 @@ beforeAll(async () => {
       return;
     }
 
+    // Sends two Set-Cookie headers (duplicate header scenario)
+    if (url.pathname === '/with-cookies') {
+      // Node.js http allows setting duplicate Set-Cookie via array
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': ['session=abc123; Path=/', 'preferences=dark; Path=/'],
+      } as any);
+      res.end('{"ok": true}');
+      return;
+    }
+
+    // Sends a header with colons in the value
+    if (url.pathname === '/with-trace') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'X-Trace': 'trace-id:12345:session-abc',
+      });
+      res.end('{"ok": true}');
+      return;
+    }
+
     res.writeHead(404);
     res.end();
   });
@@ -378,6 +399,75 @@ Content-Type: application/json
 
 \`\`\`http
 Content-Type: application/json; charset=xxxxx
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    expect(result.passed).toBe(1);
+  });
+
+  it('duplicate Set-Cookie headers: asserting first cookie value passes', async () => {
+    // Server sends two Set-Cookie headers.
+    // BUG: runner uses `actualHeaders[name] = value` in forEach — second call
+    //      overwrites first, so only the last Set-Cookie is visible.
+    // FIX: accumulate duplicate headers, check each value separately.
+    const md = `
+# API
+
+## Check session cookie
+
+**Request** → \`GET /with-cookies\`
+
+**Response** → \`🟢 200 OK\`
+
+**Response Headers**
+
+\`\`\`http
+Set-Cookie: session=abc123; Path=/
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    // RED if bug present: only last Set-Cookie value seen → session cookie not found → fails
+    expect(result.passed).toBe(1);
+  });
+
+  it('duplicate Set-Cookie headers: asserting second cookie value passes', async () => {
+    const md = `
+# API
+
+## Check preferences cookie
+
+**Request** → \`GET /with-cookies\`
+
+**Response** → \`🟢 200 OK\`
+
+**Response Headers**
+
+\`\`\`http
+Set-Cookie: preferences=dark; Path=/
+\`\`\`
+`;
+    const result = await runSpec(md, config());
+    expect(result.passed).toBe(1);
+  });
+
+  it('colon in response header value: full value survives through spec parse → runner', async () => {
+    // Server sends: X-Trace: trace-id:12345:session-abc
+    // Spec asserts: X-Trace: trace-id:12345:session-abc
+    // extractHeadersBlock splits on first colon only (split(':')[0] + rest.join(':'))
+    // so the spec value should be "trace-id:12345:session-abc", not "trace-id" alone
+    const md = `
+# API
+
+## Check trace header
+
+**Request** → \`GET /with-trace\`
+
+**Response** → \`🟢 200 OK\`
+
+**Response Headers**
+
+\`\`\`http
+X-Trace: trace-id:12345:session-abc
 \`\`\`
 `;
     const result = await runSpec(md, config());
