@@ -59,6 +59,8 @@ A spec file is a markdown file with `## H2` headings as test cases. Each test ca
 
 **Pattern matching:** `xxxxxxxxxxxx` matches any 12-character alphanumeric string. `0000000000` matches any digits of the same length.
 
+**Response status emoji:** The emoji before the status code is decorative — specdown only reads the 3-digit number. `🟢 200 OK`, `🔴 404 Not Found`, `200 OK` (no emoji), and `🚀 201 Created` all parse identically.
+
 **Variable capture:** `"id": "usr_xxxxxxxxxxxx",  // save as: $user_id` captures the value for use in later steps.
 
 **Variable substitution:** `$user_id` in paths and request bodies is replaced with the captured value.

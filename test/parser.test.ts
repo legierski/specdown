@@ -306,4 +306,26 @@ And that's how you create a user.
     expect(tests[0].steps[0].body).toEqual({ name: 'Sarah' });
     expect(tests[0].steps[0].response).toEqual({ id: '1' });
   });
+
+  // ──────────────────────────────────────
+  // Emoji flexibility on response status line
+  // ──────────────────────────────────────
+
+  it('parses status with no emoji', () => {
+    const md = `# API\n\n## Test\n\n**Request** → \`GET /v1/ping\`\n\n**Response** → \`200 OK\`\n`;
+    const tests = parseMarkdownSpec(md);
+    expect(tests[0].steps[0].status).toBe(200);
+  });
+
+  it('parses status with arbitrary emoji (not 🟢)', () => {
+    const md = `# API\n\n## Test\n\n**Request** → \`GET /v1/ping\`\n\n**Response** → \`🚀 201 Created\`\n`;
+    const tests = parseMarkdownSpec(md);
+    expect(tests[0].steps[0].status).toBe(201);
+  });
+
+  it('parses status with multiple emoji', () => {
+    const md = `# API\n\n## Test\n\n**Request** → \`DELETE /v1/resource\`\n\n**Response** → \`⚠️ 🔴 404 Not Found\`\n`;
+    const tests = parseMarkdownSpec(md);
+    expect(tests[0].steps[0].status).toBe(404);
+  });
 });
