@@ -105,6 +105,20 @@ describe('parseFrontmatter', () => {
     expect(fm!.http?.headers?.['Authorization']).toBe('Bearer: token:v2');
   });
 
+  it('parses connection from frontmatter', () => {
+    const md = `---\nconnection: test.db\n---\n\n# API\n`;
+    const fm = parseFrontmatter(md);
+    expect(fm).not.toBeNull();
+    expect(fm!.sql?.connection).toBe('test.db');
+  });
+
+  it('parses shell from frontmatter', () => {
+    const md = `---\nshell: zsh\n---\n\n# API\n`;
+    const fm = parseFrontmatter(md);
+    expect(fm).not.toBeNull();
+    expect(fm!.cli?.shell).toBe('zsh');
+  });
+
   it('handles frontmatter with only base', () => {
     const md = `---\nbase: http://staging.example.com\n---\n`;
     const fm = parseFrontmatter(md);

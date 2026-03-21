@@ -36,7 +36,8 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
   let base: string | undefined;
   let timeout: number | undefined;
   let headers: Record<string, string> | undefined;
-  let database: string | undefined;
+  let connection: string | undefined;
+  let shell: string | undefined;
 
   let i = 0;
   while (i < fmLines.length) {
@@ -51,8 +52,11 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
       const val = parseInt(line.slice('timeout:'.length).trim(), 10);
       if (!isNaN(val)) timeout = val;
       i++;
-    } else if (line.startsWith('database:')) {
-      database = line.slice('database:'.length).trim();
+    } else if (line.startsWith('connection:')) {
+      connection = line.slice('connection:'.length).trim();
+      i++;
+    } else if (line.startsWith('shell:')) {
+      shell = line.slice('shell:'.length).trim();
       i++;
     } else if (line.startsWith('headers:')) {
       headers = {};
@@ -81,7 +85,7 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
       if (key && !line.startsWith(' ') && !line.startsWith('\t')) {
         if (!METADATA_FIELDS.has(key)) {
           process.stderr.write(
-            `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers, database)\n`
+            `specdown: unknown frontmatter field '${key}' (valid: base, timeout, headers, connection, shell)\n`
           );
         }
       }
@@ -89,7 +93,7 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
     }
   }
 
-  if (base === undefined && timeout === undefined && headers === undefined && database === undefined) return null;
+  if (base === undefined && timeout === undefined && headers === undefined && connection === undefined && shell === undefined) return null;
 
   const result: any = {};
 
@@ -101,8 +105,12 @@ export function parseFrontmatter(markdown: string): Partial<SpecConfig> | null {
     result.http = http;
   }
 
-  if (database !== undefined) {
-    result.sql = { database };
+  if (shell !== undefined) {
+    result.cli = { shell };
+  }
+
+  if (connection !== undefined) {
+    result.sql = { connection };
   }
 
   return result;

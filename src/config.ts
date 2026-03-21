@@ -15,8 +15,12 @@ export interface SpecConfig {
     headers: Record<string, string>;
     timeout?: number;
   };
+  cli?: {
+    shell?: string;
+    timeout?: number;
+  };
   sql?: {
-    database: string;
+    connection: string;
   };
 }
 
@@ -48,7 +52,7 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
     return {};
   }
 
-  if (!parsed.http && !parsed.sql) return {};
+  if (!parsed.http && !parsed.cli && !parsed.sql) return {};
 
   const result: Partial<SpecConfig> = {};
 
@@ -62,8 +66,14 @@ function parseTomlConfig(content: string): Partial<SpecConfig> {
     }
   }
 
-  if (parsed.sql?.database) {
-    result.sql = { database: parsed.sql.database };
+  if (parsed.cli) {
+    result.cli = {};
+    if (parsed.cli.shell !== undefined) result.cli.shell = parsed.cli.shell;
+    if (parsed.cli.timeout !== undefined) result.cli.timeout = parsed.cli.timeout;
+  }
+
+  if (parsed.sql?.connection) {
+    result.sql = { connection: parsed.sql.connection };
   }
 
   return result;
@@ -83,7 +93,7 @@ export function parseConfigFile(filePath: string): SpecConfig {
   const content = readFileSync(filePath, 'utf-8');
   const partial = parseTomlConfig(content);
 
-  if (!partial.http && !partial.sql) {
+  if (!partial.http && !partial.cli && !partial.sql) {
     return defaultConfig();
   }
 
@@ -104,10 +114,10 @@ export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): Sp
     },
   };
 
-  // Merge headers: child overrides parent, empty string removes
+  // Merge headers: child overrides parent, empty string or "none" removes
   if (child.http?.headers) {
     for (const [key, value] of Object.entries(child.http.headers)) {
-      if (value === '') {
+      if (value === '' || value === 'none') {
         delete merged.http.headers[key];
       } else {
         merged.http.headers[key] = value;
@@ -115,9 +125,17 @@ export function mergeConfigs(parent: SpecConfig, child: Partial<SpecConfig>): Sp
     }
   }
 
+  // Merge cli: child overrides parent per-field
+  if (child.cli || parent.cli) {
+    merged.cli = {
+      shell: child.cli?.shell ?? parent.cli?.shell,
+      timeout: child.cli?.timeout ?? parent.cli?.timeout,
+    };
+  }
+
   // Merge sql: child overrides parent
-  if (child.sql?.database) {
-    merged.sql = { database: child.sql.database };
+  if (child.sql?.connection) {
+    merged.sql = { connection: child.sql.connection };
   } else if (parent.sql) {
     merged.sql = { ...parent.sql };
   }
@@ -157,7 +175,7 @@ export function resolveConfig(dir: string): SpecConfig {
   for (let i = 1; i < configFiles.length; i++) {
     const content = readFileSync(configFiles[i], 'utf-8');
     const partial = parseTomlConfig(content);
-    if (partial.http || partial.sql) {
+    if (partial.http || partial.cli || partial.sql) {
       config = mergeConfigs(config, partial);
     }
   }

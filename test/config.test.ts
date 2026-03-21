@@ -76,6 +76,38 @@ describe('parseConfigFile', () => {
 // mergeConfigs — cascade/override configs
 // ──────────────────────────────────────
 
+describe('parseConfigFile — cli section', () => {
+  it('parses [cli] shell and timeout', () => {
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[http]\nbase = "http://localhost"\n\n[cli]\nshell = "bash"\ntimeout = 10000\n`);
+    const config = parseConfigFile(file);
+    expect(config.cli?.shell).toBe('bash');
+    expect(config.cli?.timeout).toBe(10000);
+  });
+
+  it('parses [cli] with shell only', () => {
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[cli]\nshell = "zsh"\n`);
+    const config = parseConfigFile(file);
+    expect(config.cli?.shell).toBe('zsh');
+    expect(config.cli?.timeout).toBeUndefined();
+  });
+
+  it('parses [sql] with connection field', () => {
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[sql]\nconnection = "test.db"\n`);
+    const config = parseConfigFile(file);
+    expect(config.sql?.connection).toBe('test.db');
+  });
+
+  it('parses [sql] with URI connection string', () => {
+    const file = join(tmpDir, '.specdown');
+    writeFileSync(file, `[sql]\nconnection = "postgres://user:pass@localhost:5432/mydb"\n`);
+    const config = parseConfigFile(file);
+    expect(config.sql?.connection).toBe('postgres://user:pass@localhost:5432/mydb');
+  });
+});
+
 describe('mergeConfigs', () => {
   it('overrides base URL from child', () => {
     const parent: SpecConfig = {
@@ -112,16 +144,41 @@ describe('mergeConfigs', () => {
     expect(merged.http.headers['Authorization']).toBeUndefined();
   });
 
-  it('does NOT treat "none" as a removal sentinel in config cascade', () => {
-    // "none" is a literal value now — consistent with step headers
+  it('treats "none" as a removal sentinel for headers', () => {
+    // Peter's design: Authorization = none removes the header
     const parent: SpecConfig = {
-      http: { base: 'http://localhost', headers: {} },
+      http: { base: 'http://localhost', headers: { 'Authorization': 'Bearer token' } },
     };
     const child: Partial<SpecConfig> = {
-      http: { base: 'http://localhost', headers: { 'X-Mode': 'none' } },
+      http: { base: 'http://localhost', headers: { 'Authorization': 'none' } },
     };
     const merged = mergeConfigs(parent, child);
-    expect(merged.http.headers['X-Mode']).toBe('none');
+    expect(merged.http.headers['Authorization']).toBeUndefined();
+  });
+
+  it('merges cli section — child overrides parent', () => {
+    const parent: SpecConfig = {
+      http: { base: 'http://localhost', headers: {} },
+      cli: { shell: 'bash', timeout: 5000 },
+    };
+    const child: Partial<SpecConfig> = {
+      cli: { shell: 'zsh' },
+    };
+    const merged = mergeConfigs(parent, child);
+    expect(merged.cli?.shell).toBe('zsh');
+    expect(merged.cli?.timeout).toBe(5000);
+  });
+
+  it('merges sql connection field', () => {
+    const parent: SpecConfig = {
+      http: { base: 'http://localhost', headers: {} },
+      sql: { connection: 'prod.db' },
+    };
+    const child: Partial<SpecConfig> = {
+      sql: { connection: 'test.db' },
+    };
+    const merged = mergeConfigs(parent, child);
+    expect(merged.sql?.connection).toBe('test.db');
   });
 
   it('preserves parent timeout when child does not set it', () => {

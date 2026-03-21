@@ -36,7 +36,7 @@ Usage:
   specdown check [file|dir]            Validate specs without execution (default: docs/)
   specdown run --format json           Output results as JSON
   specdown run --base URL              Set base URL (default: http://localhost:3000)
-  specdown run --database PATH         Set SQLite database path for SQL mode
+  specdown run --connection STRING      Set database connection (path or URI) for SQL mode
   specdown run --test "substring"      Filter tests by name
   specdown run --verbose               Show full response body on failure
 
@@ -44,7 +44,7 @@ Examples:
   specdown run                         Run all .spec.md in docs/
   specdown check api.spec.md           Validate a spec file
   specdown run docs/ --base http://localhost:8080
-  specdown run db.spec.md --database test.db
+  specdown run db.spec.md --connection test.db
 `);
     process.exit(0);
   }
@@ -87,7 +87,7 @@ Examples:
       if (opts.baseOverridden) {
         fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
       }
-      if (opts.databaseOverridden && opts.config.sql) {
+      if (opts.connectionOverridden && opts.config.sql) {
         fileConfig = mergeConfigs(fileConfig, { sql: opts.config.sql });
       }
 
@@ -124,7 +124,7 @@ Examples:
     if (opts.baseOverridden) {
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
     }
-    if (opts.databaseOverridden && opts.config.sql) {
+    if (opts.connectionOverridden && opts.config.sql) {
       fileConfig = mergeConfigs(fileConfig, { sql: opts.config.sql });
     }
 

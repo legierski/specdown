@@ -24,6 +24,16 @@ describe('parseArgs — smoke tests', () => {
     expect(parseArgs(['run', 'a.spec.md', 'b.spec.md']).targets).toEqual(['a.spec.md', 'b.spec.md']);
   });
 
+  it('parses --connection flag', () => {
+    const opts = parseArgs(['run', '--connection', 'test.db']);
+    expect(opts.config.sql?.connection).toBe('test.db');
+    expect(opts.connectionOverridden).toBe(true);
+  });
+
+  it('connectionOverridden is false when --connection not passed', () => {
+    expect(parseArgs(['run']).connectionOverridden).toBe(false);
+  });
+
   it('parses --verbose flag', () => {
     expect((parseArgs(['run', '--verbose']) as any).verbose).toBe(true);
   });

@@ -24,7 +24,7 @@ let dbPath: string;
 function config(): SpecConfig {
   return {
     http: { base: 'http://localhost:1', headers: {} },
-    sql: { database: dbPath },
+    sql: { connection: dbPath },
   };
 }
 
@@ -246,7 +246,7 @@ describe('runner — SQL mode', () => {
       http: { base: 'http://localhost:1', headers: {} },
     });
     expect(result.failed).toBe(1);
-    expect(result.tests[0].errors[0]).toContain('database');
+    expect(result.tests[0].errors[0]).toContain('connection');
   });
 
   it('substitutes variables in queries', async () => {
@@ -290,7 +290,7 @@ describe('runner — SQL mode', () => {
 `;
     const result = await runSpec(md, {
       http: { base: 'http://localhost:1', headers: {} },
-      sql: { database: '/nonexistent/path/to/db.sqlite' },
+      sql: { connection: '/nonexistent/path/to/db.sqlite' },
     });
     expect(result.failed).toBe(1);
   });

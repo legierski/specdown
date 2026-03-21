@@ -2,6 +2,14 @@
 
 All notable changes to specdown.
 
+## 0.9.1
+
+Config infrastructure. Three changes aligned with Peter's design docs:
+
+1. **`[cli]` config section** — `.specdown` now supports `[cli]` with `shell` and `timeout` fields, parsed from TOML and merged through the full cascade. Frontmatter gains `shell:` field.
+2. **`database` → `connection` rename** — `SpecConfig.sql.connection` replaces `sql.database` everywhere: config files, frontmatter (`connection:` field), CLI flag (`--connection`), error messages. Future-proofs for non-SQLite databases.
+3. **`none` header removal** — `Authorization = "none"` in `.specdown` config or frontmatter now removes the header from the cascade, matching Peter's folder-override design. Empty string `""` still works too.
+
 ## 0.9.0
 
 CLI mode — specdown is no longer HTTP-only. Use `**Run**` and `**Output**` keywords to test command-line tools. Inline commands (`**Run** → \`echo hello\``) and code block commands (`**Run** ↓` + bash block) both work. Exit code assertions (`**Output** → \`🟢 exit 0\``), JSON output matching with annotations, plain text output matching, variable substitution in commands, and timeout support all carry over from HTTP mode. Parser uses a union type (`Step = HttpStep | CliStep`) making the architecture extensible for future modes. Static variable chain analysis updated to check CLI steps.

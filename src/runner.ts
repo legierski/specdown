@@ -261,12 +261,12 @@ async function executeSqlStep(
     ({ stepIndex, stepCount, mode: 'sql', method: 'QUERY', path: query, status: 0, actualBody: body });
 
   // Check database config
-  if (!config.sql?.database) {
-    errors.push('No database configured — set sql.database in .specdown, frontmatter, or --database flag');
+  if (!config.sql?.connection) {
+    errors.push('No database configured — set sql.connection in .specdown, frontmatter connection:, or --connection flag');
     return { errors, failedStep: makeFailedStep() };
   }
 
-  const result = execSql(config.sql.database, query, step.expectedType);
+  const result = execSql(config.sql.connection, query, step.expectedType);
 
   if (result.error) {
     errors.push(`SQL error: ${result.error}`);
