@@ -14,13 +14,40 @@
  * Only treats runs of 2+ x's or 2+ 0's as wildcards.
  */
 export function toPattern(value: string): RegExp {
-  // Escape regex special chars
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Replace runs of 2+ x with alphanumeric match of same length
-  const withWildcards = escaped
-    .replace(/x{2,}/g, (m) => `[a-zA-Z0-9_-]{${m.length}}`)
-    .replace(/0{2,}/g, (m) => `[0-9]{${m.length}}`);
-  return new RegExp(`^${withWildcards}$`);
+  // First, collect all pattern runs with their positions (before escaping)
+  const replacements: { start: number; end: number; regex: string }[] = [];
+
+  // Find runs of 2+ x
+  for (const m of value.matchAll(/x{2,}/g)) {
+    replacements.push({ start: m.index!, end: m.index! + m[0].length, regex: `[a-zA-Z0-9_-]{${m[0].length}}` });
+  }
+  // Find runs of 2+ 0
+  for (const m of value.matchAll(/0{2,}/g)) {
+    replacements.push({ start: m.index!, end: m.index! + m[0].length, regex: `[0-9]{${m[0].length}}` });
+  }
+
+  // Sort by position (reverse) and build result
+  replacements.sort((a, b) => b.start - a.start);
+
+  let result = value;
+  const placeholders: Map<string, string> = new Map();
+
+  for (let i = 0; i < replacements.length; i++) {
+    const r = replacements[i];
+    const placeholder = `\x00PATTERN${i}\x00`;
+    placeholders.set(placeholder, r.regex);
+    result = result.slice(0, r.start) + placeholder + result.slice(r.end);
+  }
+
+  // Escape regex special chars in the literal parts
+  result = result.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Restore placeholders with their regex patterns
+  for (const [placeholder, regex] of placeholders) {
+    result = result.replace(placeholder, regex);
+  }
+
+  return new RegExp(`^${result}$`);
 }
 
 /**
