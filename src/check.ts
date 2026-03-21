@@ -6,6 +6,7 @@
  */
 
 import { parseMarkdownSpec } from './parser.js';
+import { analyzeVarChain } from './analyze.js';
 import type { SpecConfig } from './config.js';
 
 export interface CheckTestSummary {
@@ -27,10 +28,11 @@ export interface CheckResult {
  */
 export function checkSpec(markdown: string, config: SpecConfig): CheckResult {
   const { tests, warnings } = parseMarkdownSpec(markdown);
+  const chainWarnings = analyzeVarChain(tests);
 
   return {
     tests: tests.map(t => ({ name: t.name, stepCount: t.steps.length })),
-    warnings,
+    warnings: [...warnings, ...chainWarnings],
     config,
   };
 }

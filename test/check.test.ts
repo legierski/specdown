@@ -96,6 +96,23 @@ describe('checkSpec — step warnings', () => {
   });
 });
 
+// ── variable chain validation (v0.7) ──
+
+describe('checkSpec — variable chain warnings', () => {
+  it('surfaces warning when $var in path is never saved by any prior step', () => {
+    const md = `# API
+
+## Fetch by ID
+
+**Request** → \`GET /v1/users/$id\`
+
+**Response** → \`🟢 200 OK\`
+`;
+    const result = checkSpec(md, defaultConfig);
+    expect(result.warnings.some(w => w.includes('$id'))).toBe(true);
+  });
+});
+
 // ── config resolution ──
 
 describe('checkSpec — config resolution', () => {
