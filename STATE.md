@@ -1,6 +1,6 @@
 # specdown — project state
 
-Last updated: v0.5.0
+Last updated: v0.7.0
 
 ## Version history
 
@@ -11,6 +11,8 @@ Last updated: v0.5.0
 | v0.3.0  | Response headers assertions, `--test` filter, config cascade (specdown.json → frontmatter → `--base`) |
 | v0.4.0  | Fix: `**Headers**` block accepted after `**Request**` line; `--base` override detection |
 | v0.5.0  | `specdown check` (dry-run parse validation); parser warnings surface silently-dropped steps; cli.ts split into args.ts / files.ts / format.ts |
+| v0.6.0  | `FailedStepContext` on TestResult (stepIndex, stepCount, method, path, status, actualBody); step context in pretty output; `--verbose` flag; `makeFailedStep` helper extracted |
+| v0.7.0  | Variable chain validation in `specdown check`; `src/analyze.ts` with `analyzeVarChain()`; false-positive guard for `$100`/`$99` |
 
 ## Source modules
 
@@ -28,10 +30,11 @@ Last updated: v0.5.0
 | `pattern.ts` | Pattern matching (`xx+`, `00+`, `any-*`, `email`) |
 | `config.ts` | Config resolution, merge, defaults |
 | `format.ts` | Terminal output formatters (pretty, json, check) |
+| `analyze.ts` | Static variable chain analysis → warnings |
 | `index.ts` | Public library exports |
 | `json.ts` | JSON annotation parsing helpers |
 
-## Test files (25 total, 399 tests)
+## Test files (26 total, 435 tests)
 
 Each source module has a corresponding test file (enforced by pre-commit hook):
 `test/${basename}.test.ts` or `test/${basename}-edge-cases.test.ts`
@@ -46,6 +49,5 @@ Each source module has a corresponding test file (enforced by pre-commit hook):
 
 ## Known gaps
 
-- `check` does not validate that `$var` references in step N are satisfied by `save as:` in step ≤N-1
-- No step context in failure output (test fails, but which step/URL is not shown)
 - No `--watch` mode
+- `analyzeVarChain` scans responseAnnotations keys for `save as:` — does not traverse body annotations (not a real use case yet)
