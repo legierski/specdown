@@ -16,7 +16,47 @@ specdown run docs/
 specdown run api.spec.md --base http://localhost:8080
 specdown run docs/ --test "create user"
 specdown run api.spec.md --format json
+
+# Validate spec files without making HTTP requests:
+specdown check api.spec.md
+specdown check docs/
 ```
+
+## `specdown check` — dry-run validation
+
+`check` parses your spec files without hitting a server. Use it in CI before running tests, or when setting up a new spec file.
+
+```
+$ specdown check docs/api.spec.md
+
+docs/api.spec.md [http://localhost:3000]
+  ✓ Create user (2 steps)
+  ✓ Delete user (1 step)
+
+2 tests in 1 file.
+```
+
+If the parser finds no tests or silently skips a step, `check` reports it:
+
+```
+docs/onboarding.spec.md [http://localhost:3000]
+  ⚠ No tests found
+    "Introduction" — section has no Request lines (no tests generated)
+
+0 tests in 1 file. Warnings found.
+```
+
+A `**Response**` line with no status code (step silently dropped in `run`) is also flagged:
+
+```
+docs/api.spec.md [http://localhost:3000]
+  ✓ Get users (1 step)
+  ⚠ "Create user" — Response line has no HTTP status code (step skipped)
+
+1 test in 1 file. Warnings found.
+```
+
+Exit code 0 if all files have tests and no warnings; 1 otherwise — suitable for CI gates.
 
 ## Spec file format
 
