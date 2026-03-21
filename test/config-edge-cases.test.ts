@@ -186,8 +186,14 @@ describe('defaultConfig', () => {
   it('returns expected defaults', () => {
     const config = defaultConfig();
     expect(config.http.base).toBe('http://localhost');
-    expect(config.http.headers['Content-Type']).toBe('application/json');
     expect(config.http.timeout).toBe(5000);
+  });
+
+  it('does NOT include Content-Type by default — runner infers it when body is present', () => {
+    // Bug: defaultConfig was pre-setting Content-Type: application/json, making
+    // the runner's inference dead code and causing GET requests to send Content-Type.
+    const config = defaultConfig();
+    expect(config.http.headers['Content-Type']).toBeUndefined();
   });
 
   it('returns a new object each time (not shared reference)', () => {

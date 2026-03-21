@@ -45,7 +45,8 @@ describe('parseConfigFile', () => {
   it('returns default config when file does not exist', () => {
     const config = parseConfigFile(join(tmpDir, 'nonexistent'));
     expect(config.http.base).toBe('http://localhost');
-    expect(config.http.headers['Content-Type']).toBe('application/json');
+    // No Content-Type default — runner infers it when a body is present
+    expect(config.http.headers['Content-Type']).toBeUndefined();
   });
 
   it('parses minimal config (just base)', () => {

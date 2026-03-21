@@ -24,9 +24,9 @@ export function defaultConfig(): SpecConfig {
   return {
     http: {
       base: 'http://localhost',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      // No Content-Type default: the runner infers it when a body is present (runner.ts).
+      // Pre-setting it here caused GET requests to incorrectly send Content-Type: application/json.
+      headers: {},
       timeout: 5000,
     },
   };
