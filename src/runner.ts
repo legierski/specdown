@@ -63,6 +63,7 @@ export async function runSpec(markdown: string, config: SpecConfig): Promise<Spe
           method: step.method,
           headers,
           body: bodyStr,
+          redirect: 'manual',
         });
 
         // Check status code

@@ -110,8 +110,13 @@ export function matchResponse(
       if (!matchesPattern(val, actual[key])) {
         errors.push(`Field "${key}": "${actual[key]}" does not match "${val}"`);
       }
+    } else if (typeof val === 'object' && val !== null) {
+      // Deep comparison for objects and arrays
+      if (JSON.stringify(actual[key]) !== JSON.stringify(val)) {
+        errors.push(`Field "${key}": ${JSON.stringify(actual[key])} !== ${JSON.stringify(val)}`);
+      }
     } else {
-      // Non-string: exact match
+      // Primitive: exact match (number, boolean, null)
       if (actual[key] !== val) {
         errors.push(`Field "${key}": ${JSON.stringify(actual[key])} !== ${JSON.stringify(val)}`);
       }
