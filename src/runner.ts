@@ -68,6 +68,7 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
 
     for (let stepIndex = 0; stepIndex < test.steps.length; stepIndex++) {
       const step = test.steps[stepIndex];
+
       // Build headers: config defaults + step overrides
       const headers: Record<string, string> = { ...config.http.headers };
       for (const [key, value] of Object.entries(step.headers)) {
@@ -80,6 +81,11 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
 
       // Substitute variables in path
       const path = substituteVars(step.path, vars);
+
+      // Helper — captures stepIndex, stepCount, method, and resolved path from this step.
+      // Declared after path is resolved so the closure always sees the substituted value.
+      const makeFailedStep = (status: number, body: any = null): FailedStepContext =>
+        ({ stepIndex, stepCount: test.steps.length, method: step.method, path, status, actualBody: body });
 
       // Substitute variables in request body
       let bodyStr: string | undefined;
@@ -120,14 +126,14 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           } else {
             errors.push(`Request failed: ${err.message}`);
           }
-          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: 0, actualBody: null };
+          failedStep = makeFailedStep(0);
           break;
         }
 
         // Check status code
         if (res.status !== step.status) {
           errors.push(`Expected status ${step.status}, got ${res.status}`);
-          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
+          failedStep = makeFailedStep(res.status);
           break; // Stop chain on status mismatch
         }
 
@@ -153,7 +159,7 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
             }
           }
           if (errors.length > 0) {
-            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
+            failedStep = makeFailedStep(res.status);
             break;
           }
         }
@@ -169,13 +175,13 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
             } else {
               errors.push('Expected JSON response body but could not parse');
             }
-            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: null };
+            failedStep = makeFailedStep(res.status);
             break;
           }
           const matchErrors = matchResponse(actual, step.response, step.responseAnnotations, vars);
           if (matchErrors.length > 0) {
             errors.push(...matchErrors);
-            failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: res.status, actualBody: actual };
+            failedStep = makeFailedStep(res.status, actual);
             break;
           }
         }
@@ -187,7 +193,7 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
           errors.push(`Request failed: ${err.message}`);
         }
         if (!failedStep) {
-          failedStep = { stepIndex, stepCount: test.steps.length, method: step.method, path, status: 0, actualBody: null };
+          failedStep = makeFailedStep(0);
         }
         break;
       } finally {
