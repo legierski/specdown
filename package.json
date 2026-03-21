@@ -1,0 +1,25 @@
+{
+  "name": "specdown",
+  "version": "0.1.0",
+  "description": "API documentation that tests itself. Write specs in markdown, run them as tests.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "specdown": "dist/cli.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": ["api", "testing", "documentation", "markdown", "specdown"],
+  "author": "Peter Legierski",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
