@@ -5,7 +5,7 @@
  * and validates responses against expected values.
  */
 
-import { parseMarkdownSpec, type Test } from './parser.js';
+import { parseMarkdownSpec, type Step } from './parser.js';
 import { matchResponse, substituteVars } from './matcher.js';
 import { matchesPattern } from './pattern.js';
 import { analyzeVarChain } from './analyze.js';
@@ -45,6 +45,139 @@ export interface SpecResult {
 }
 
 /**
+ * Execute a single step: build headers, fetch, assert status/headers/body.
+ * Mutates `vars` in-place when save-as annotations succeed.
+ * Returns errors and, on failure, a FailedStepContext for output.
+ */
+async function executeStep(
+  step: Step,
+  config: SpecConfig,
+  vars: Record<string, string>,
+  stepIndex: number,
+  stepCount: number,
+): Promise<{ errors: string[]; failedStep?: FailedStepContext }> {
+  const errors: string[] = [];
+
+  // Build request headers: config defaults + step overrides
+  const headers: Record<string, string> = { ...config.http.headers };
+  for (const [key, value] of Object.entries(step.headers)) {
+    if (value === '') {
+      delete headers[key];
+    } else {
+      headers[key] = value;
+    }
+  }
+
+  // Substitute variables in path and body
+  const path = substituteVars(step.path, vars);
+  const makeFailedStep = (status: number, body: any = null): FailedStepContext =>
+    ({ stepIndex, stepCount, method: step.method, path, status, actualBody: body });
+
+  // Use !== null (not if(step.body)) so falsey JSON values like false, 0, "" are included.
+  // null is the sentinel for "no body block in spec".
+  let bodyStr: string | undefined;
+  if (step.body !== null && step.body !== undefined) {
+    bodyStr = substituteVars(JSON.stringify(step.body), vars);
+  }
+  if (bodyStr && !headers['Content-Type'] && !headers['content-type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  // AbortController covers BOTH fetch() and res.json() — timer stays armed
+  // through body parsing so slow body delivery is also caught by the timeout.
+  const url = `${config.http.base}${path}`;
+  const timeout = config.http.timeout;
+  let abortTimer: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
+  if (timeout !== undefined && timeout > 0) {
+    abortTimer = setTimeout(() => controller.abort(), timeout);
+  }
+
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: step.method,
+        headers,
+        body: bodyStr,
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      if (controller.signal.aborted) {
+        errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+      } else {
+        errors.push(`Request failed: ${err.message}`);
+      }
+      return { errors, failedStep: makeFailedStep(0) };
+    }
+
+    // Assert status code
+    if (res.status !== step.status) {
+      errors.push(`Expected status ${step.status}, got ${res.status}`);
+      return { errors, failedStep: makeFailedStep(res.status) };
+    }
+
+    // Assert response headers (if any declared in spec)
+    if (step.responseHeaders && Object.keys(step.responseHeaders).length > 0) {
+      // Accumulate duplicate headers (e.g. Set-Cookie) so first value is not overwritten.
+      const actualHeaders: Record<string, string[]> = {};
+      res.headers.forEach((value, name) => {
+        const key = name.toLowerCase();
+        actualHeaders[key] = actualHeaders[key] ? [...actualHeaders[key], value] : [value];
+      });
+      for (const [assertedName, assertedValue] of Object.entries(step.responseHeaders)) {
+        const actuals = actualHeaders[assertedName.toLowerCase()];
+        if (actuals === undefined) {
+          errors.push(`Response header missing: ${assertedName}`);
+          break;
+        }
+        if (!actuals.some(v => matchesPattern(assertedValue, v))) {
+          errors.push(
+            `Response header mismatch: ${assertedName}\n  expected: ${assertedValue}\n  actual:   ${actuals.join(', ')}`
+          );
+          break;
+        }
+      }
+      if (errors.length > 0) return { errors, failedStep: makeFailedStep(res.status) };
+    }
+
+    // Assert response body (if declared in spec)
+    // Use !== null so falsey JSON values like false, 0, "" are checked.
+    // null is the sentinel for "no expected body in spec".
+    if (step.response !== null && step.response !== undefined) {
+      let actual: any;
+      try {
+        actual = await res.json();
+      } catch (err: any) {
+        if (controller.signal.aborted) {
+          errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+        } else {
+          errors.push('Expected JSON response body but could not parse');
+        }
+        return { errors, failedStep: makeFailedStep(res.status) };
+      }
+      const matchErrors = matchResponse(actual, step.response, step.responseAnnotations, vars);
+      if (matchErrors.length > 0) {
+        errors.push(...matchErrors);
+        return { errors, failedStep: makeFailedStep(res.status, actual) };
+      }
+    }
+  } catch (err: any) {
+    if (controller.signal.aborted) {
+      errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
+    } else {
+      errors.push(`Request failed: ${err.message}`);
+    }
+    return { errors, failedStep: makeFailedStep(0) };
+  } finally {
+    if (abortTimer !== undefined) clearTimeout(abortTimer);
+  }
+
+  return { errors };
+}
+
+/**
  * Run all tests from a markdown spec string against a live server.
  *
  * @param filter - Optional case-insensitive substring filter on test names.
@@ -58,162 +191,21 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
   let skipped = 0;
 
   for (const test of tests) {
-    // Apply filter: skip tests whose name doesn't contain the filter string
     if (filter != null && !test.name.toLowerCase().includes(filter.toLowerCase())) {
       skipped++;
       continue;
     }
     const testStart = Date.now();
-    const errors: string[] = [];
     const vars: Record<string, string> = {};
+    let errors: string[] = [];
     let failedStep: FailedStepContext | undefined;
 
     for (let stepIndex = 0; stepIndex < test.steps.length; stepIndex++) {
-      const step = test.steps[stepIndex];
-
-      // Build headers: config defaults + step overrides
-      const headers: Record<string, string> = { ...config.http.headers };
-      for (const [key, value] of Object.entries(step.headers)) {
-        if (value === '') {
-          delete headers[key];
-        } else {
-          headers[key] = value;
-        }
-      }
-
-      // Substitute variables in path
-      const path = substituteVars(step.path, vars);
-
-      // Helper — captures stepIndex, stepCount, method, and resolved path from this step.
-      // Declared after path is resolved so the closure always sees the substituted value.
-      const makeFailedStep = (status: number, body: any = null): FailedStepContext =>
-        ({ stepIndex, stepCount: test.steps.length, method: step.method, path, status, actualBody: body });
-
-      // Substitute variables in request body
-      // Use !== null (not if(step.body)) so falsey JSON values like false, 0, "" are included.
-      // null is the sentinel for "no body block in spec".
-      let bodyStr: string | undefined;
-      if (step.body !== null && step.body !== undefined) {
-        bodyStr = substituteVars(JSON.stringify(step.body), vars);
-      }
-
-      // Infer Content-Type for JSON bodies if not already set
-      if (bodyStr && !headers['Content-Type'] && !headers['content-type']) {
-        headers['Content-Type'] = 'application/json';
-      }
-
-      // Execute request — AbortController covers BOTH fetch() and res.json().
-      // Timer is NOT cleared after fetch() resolves on headers; it stays armed
-      // through body parsing so slow body delivery is also covered by the timeout.
-      const url = `${config.http.base}${path}`;
-      const timeout = config.http.timeout;
-      let abortTimer: ReturnType<typeof setTimeout> | undefined;
-      const controller = new AbortController();
-      if (timeout !== undefined && timeout > 0) {
-        abortTimer = setTimeout(() => controller.abort(), timeout);
-      }
-
-      try {
-        // Fetch — throws AbortError if aborted during network phase
-        let res: Response;
-        try {
-          res = await fetch(url, {
-            method: step.method,
-            headers,
-            body: bodyStr,
-            redirect: 'manual',
-            signal: controller.signal,
-          });
-        } catch (err: any) {
-          if (controller.signal.aborted) {
-            errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
-          } else {
-            errors.push(`Request failed: ${err.message}`);
-          }
-          failedStep = makeFailedStep(0);
-          break;
-        }
-
-        // Check status code
-        if (res.status !== step.status) {
-          errors.push(`Expected status ${step.status}, got ${res.status}`);
-          failedStep = makeFailedStep(res.status);
-          break; // Stop chain on status mismatch
-        }
-
-        // Check response headers if asserted
-        if (step.responseHeaders && Object.keys(step.responseHeaders).length > 0) {
-          // Build a lowercase-keyed map of actual response headers for case-insensitive lookup.
-          // Accumulate duplicate headers (e.g. Set-Cookie) as arrays so the first value is not
-          // overwritten by subsequent values (which forEach visits in order).
-          const actualHeaders: Record<string, string[]> = {};
-          res.headers.forEach((value, name) => {
-            const key = name.toLowerCase();
-            if (actualHeaders[key] === undefined) {
-              actualHeaders[key] = [value];
-            } else {
-              actualHeaders[key].push(value);
-            }
-          });
-
-          for (const [assertedName, assertedValue] of Object.entries(step.responseHeaders)) {
-            const actuals = actualHeaders[assertedName.toLowerCase()];
-            if (actuals === undefined) {
-              errors.push(`Response header missing: ${assertedName}`);
-              break;
-            }
-            // Pass if any of the accumulated values matches (handles duplicate headers)
-            const anyMatch = actuals.some(v => matchesPattern(assertedValue, v));
-            if (!anyMatch) {
-              errors.push(
-                `Response header mismatch: ${assertedName}\n  expected: ${assertedValue}\n  actual:   ${actuals.join(', ')}`
-              );
-              break;
-            }
-          }
-          if (errors.length > 0) {
-            failedStep = makeFailedStep(res.status);
-            break;
-          }
-        }
-
-        // Check response body if expected — signal still armed, covers slow body delivery
-        // Use !== null so falsey JSON values like false, 0, "" are checked.
-        // null is the sentinel for "no expected body in spec".
-        if (step.response !== null && step.response !== undefined) {
-          let actual: any;
-          try {
-            actual = await res.json();
-          } catch (err: any) {
-            if (controller.signal.aborted) {
-              errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
-            } else {
-              errors.push('Expected JSON response body but could not parse');
-            }
-            failedStep = makeFailedStep(res.status);
-            break;
-          }
-          const matchErrors = matchResponse(actual, step.response, step.responseAnnotations, vars);
-          if (matchErrors.length > 0) {
-            errors.push(...matchErrors);
-            failedStep = makeFailedStep(res.status, actual);
-            break;
-          }
-        }
-      } catch (err: any) {
-        // Catch-all for unexpected errors not caught by inner try blocks
-        if (controller.signal.aborted) {
-          errors.push(`Request timed out after ${timeout}ms (${step.method} ${path})`);
-        } else {
-          errors.push(`Request failed: ${err.message}`);
-        }
-        if (!failedStep) {
-          failedStep = makeFailedStep(0);
-        }
-        break;
-      } finally {
-        // Clear timer after entire step (fetch + body parsing) completes
-        if (abortTimer !== undefined) clearTimeout(abortTimer);
+      const result = await executeStep(test.steps[stepIndex], config, vars, stepIndex, test.steps.length);
+      if (result.errors.length > 0) {
+        errors = result.errors;
+        failedStep = result.failedStep;
+        break; // Stop chain on first failure
       }
     }
 

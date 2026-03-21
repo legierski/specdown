@@ -53,3 +53,26 @@ Each source module has a corresponding test file (enforced by pre-commit hook):
 
 - No `--watch` mode
 - `analyzeVarChain` scans responseAnnotations keys for `save as:` — does not traverse body annotations (not a real use case yet)
+
+## Autonomous decisions (2026-03-21, Marcus silent 30+ min)
+
+### v0.9 plan — refactor first, then features
+
+Rule 7 violations (files > ~100 lines): runner.ts (237), parser.ts (222), matcher.ts (165),
+cli.ts (157), config.ts (151), frontmatter.ts (110), format.ts (108).
+
+Most urgent: **runner.ts** at 237 lines bundles three distinct concerns:
+  1. HTTP orchestration (fetch, abort, redirect)
+  2. Response header assertions
+  3. Response body assertions
+
+Decision: extract header/body assertion logic into `src/assert.ts` — a new small module
+containing `assertHeaders()` and `assertBody()`. runner.ts becomes the loop only.
+
+Feature gaps considered for v0.9:
+  - `--bail`: stop on first failure (common CI need, low effort)
+  - `--quiet`: only show failures (complement to --verbose)
+  - env var substitution in config (`${API_KEY}`) — complex, defer
+  - Non-JSON bodies (form-encoded) — defer to v0.10+
+
+Priority order: refactor runner.ts → add --bail → add --quiet → reassess
