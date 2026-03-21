@@ -8,6 +8,10 @@
   "bin": {
     "specdown": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
