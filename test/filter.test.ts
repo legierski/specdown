@@ -181,7 +181,7 @@ describe('runSpec filter', () => {
 // parseArgs: --test flag parsing
 // ──────────────────────────────────────
 
-import { parseArgs } from '../src/cli.js';
+import { parseArgs } from '../src/args.js';
 
 describe('parseArgs --test', () => {
   it('no --test flag → filter is null', () => {

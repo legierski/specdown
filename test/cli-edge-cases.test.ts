@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { createServer, type Server } from 'node:http';
 import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { parseArgs, findSpecFiles } from '../src/cli.js';
+import { parseArgs } from '../src/args.js';
+import { findSpecFiles } from '../src/files.js';
 import { runSpec } from '../src/runner.js';
 import type { SpecConfig } from '../src/config.js';
 
