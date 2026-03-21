@@ -27,8 +27,14 @@ export interface Test {
   steps: Step[];
 }
 
+export interface ParseResult {
+  tests: Test[];
+  /** Human-readable warnings about sections or steps that were silently skipped. */
+  warnings: string[];
+}
+
 /**
- * Parse a markdown spec file into an array of test definitions.
+ * Parse a markdown spec file into tests and parse warnings.
  *
  * Format:
  *   # Title (ignored)
@@ -41,15 +47,27 @@ export interface Test {
  *   ```json
  *   { expected response }
  *   ```
+ *
+ * Returns { tests, warnings } where warnings describes any ## sections or
+ * Request/Response pairs that were skipped due to missing or invalid syntax.
  */
-export function parseMarkdownSpec(raw: string): Test[] {
+export function parseMarkdownSpec(raw: string): ParseResult {
   const sections = raw.split(/^## /m).slice(1);
   const tests: Test[] = [];
+  const warnings: string[] = [];
+
+  if (sections.length === 0) {
+    if (raw.trim().length > 0) {
+      warnings.push('No ## headings found — no tests generated (add ## Test Name sections)');
+    }
+    return { tests, warnings };
+  }
 
   for (const section of sections) {
     const lines = section.trim().split('\n');
     const name = lines[0].trim();
     const steps: Step[] = [];
+    let sectionHadRequest = false;
 
     let idx = 1;
     let currentHeaders: Record<string, string> = {};
@@ -69,23 +87,24 @@ export function parseMarkdownSpec(raw: string): Test[] {
         continue;
       }
 
-      // Request line — supports both → and ->
+      // Request line
       if (line.includes('**Request**')) {
+        sectionHadRequest = true;
         const methodMatch = line.match(/`(GET|POST|PUT|PATCH|DELETE) (.+?)`/);
-        if (!methodMatch) { idx++; continue; }
+        if (!methodMatch) {
+          warnings.push(`"${name}" — Request line has no valid HTTP method (step skipped)`);
+          idx++;
+          continue;
+        }
 
         const [, method, path] = methodMatch;
         idx++;
 
-        // Scan between Request and Response: collect optional **Headers** block and
-        // optional JSON body in any order. **Headers** here merges with currentHeaders
-        // so users can write headers after the request line (HTTP message order).
         let body = null;
         let bodyAnnotations: Record<string, string> = {};
 
         while (idx < lines.length && !lines[idx].includes('**Response**')) {
           if (lines[idx].includes('**Headers**')) {
-            // **Headers** after **Request** — merge into currentHeaders for this step
             idx++;
             while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
             if (idx < lines.length) {
@@ -100,7 +119,6 @@ export function parseMarkdownSpec(raw: string): Test[] {
             if (result) {
               body = result.data;
               bodyAnnotations = result.annotations;
-              // Apply length annotations to request body
               for (const [key, annotation] of Object.entries(bodyAnnotations)) {
                 if (annotation.startsWith('length:')) {
                   const length = parseInt(annotation.replace('length:', '').trim());
@@ -116,21 +134,26 @@ export function parseMarkdownSpec(raw: string): Test[] {
 
         // Find Response line
         while (idx < lines.length && !lines[idx].includes('**Response**')) idx++;
-        if (idx >= lines.length) continue;
+        if (idx >= lines.length) {
+          warnings.push(`"${name}" — Request \`${method} ${path}\` has no Response line (step skipped)`);
+          continue;
+        }
 
         const responseLine = lines[idx];
         const statusMatch = responseLine.match(/(\d{3})/);
-        if (!statusMatch) { idx++; continue; }
+        if (!statusMatch) {
+          warnings.push(`"${name}" — Response line has no HTTP status code (step skipped)`);
+          idx++;
+          continue;
+        }
 
         const status = parseInt(statusMatch[1]);
         idx++;
 
-        // Look for optional **Response Headers** block, then optional response body
         let responseHeaders: Record<string, string> = {};
         let response = null;
         let responseAnnotations: Record<string, string> = {};
 
-        // Scan forward: skip blank lines / prose until we hit something recognizable
         while (
           idx < lines.length &&
           !lines[idx].includes('```json') &&
@@ -141,17 +164,14 @@ export function parseMarkdownSpec(raw: string): Test[] {
           idx++;
         }
 
-        // Optional response headers block
         if (idx < lines.length && lines[idx].includes('**Response Headers**')) {
           idx++;
-          // skip to the opening ```http (or ```)
           while (idx < lines.length && !lines[idx].startsWith('```')) idx++;
           if (idx < lines.length) {
             const result = extractHeadersBlock(lines, idx);
             responseHeaders = result.headers;
             idx = result.endIdx;
           }
-          // Now scan for response body
           while (
             idx < lines.length &&
             !lines[idx].includes('```json') &&
@@ -183,7 +203,6 @@ export function parseMarkdownSpec(raw: string): Test[] {
           responseAnnotations,
         });
 
-        // Reset headers after use
         currentHeaders = {};
         continue;
       }
@@ -193,8 +212,11 @@ export function parseMarkdownSpec(raw: string): Test[] {
 
     if (steps.length > 0) {
       tests.push({ name, steps });
+    } else if (!sectionHadRequest) {
+      // Section had no Request lines at all — warn about prose-only sections
+      warnings.push(`"${name}" — section has no Request lines (no tests generated)`);
     }
   }
 
-  return tests;
+  return { tests, warnings };
 }

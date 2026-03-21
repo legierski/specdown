@@ -23,6 +23,8 @@ export interface SpecResult {
   failed: number;
   skipped: number;
   duration: number;
+  /** Parse warnings: sections/steps silently skipped during markdown parsing. */
+  warnings: string[];
 }
 
 /**
@@ -32,7 +34,7 @@ export interface SpecResult {
  *                 null or undefined = run all tests.
  */
 export async function runSpec(markdown: string, config: SpecConfig, filter?: string | null): Promise<SpecResult> {
-  const tests = parseMarkdownSpec(markdown);
+  const { tests, warnings: parseWarnings } = parseMarkdownSpec(markdown);
   const results: TestResult[] = [];
   const specStart = Date.now();
   let skipped = 0;
@@ -180,5 +182,6 @@ export async function runSpec(markdown: string, config: SpecConfig, filter?: str
     failed: results.filter(t => !t.passed).length,
     skipped,
     duration: Date.now() - specStart,
+    warnings: parseWarnings,
   };
 }

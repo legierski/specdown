@@ -82,7 +82,7 @@ describe('integration: malformed spec file', () => {
 
   it('parser returns empty array for malformed spec', () => {
     const md = readFileSync(resolve(fixtureDir, 'malformed.spec.md'), 'utf-8');
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toEqual([]);
   });
 });

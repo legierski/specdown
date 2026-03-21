@@ -1,13 +1,64 @@
 import { describe, it, expect } from 'vitest';
 import { parseMarkdownSpec } from '../src/parser.js';
 
+// ──────────────────────────────────────────────────────────────
+// RED: parseMarkdownSpec should return { tests, warnings }
+// not bare Test[]. These tests will fail until the parser is
+// updated to track parse warnings.
+// ──────────────────────────────────────────────────────────────
+
+describe('parser — warnings shape (RED until parser updated)', () => {
+  it('returns { tests, warnings } object not a bare array', () => {
+    const result = parseMarkdownSpec('');
+    expect(result).toHaveProperty('tests');
+    expect(result).toHaveProperty('warnings');
+    expect(Array.isArray((result as any).tests)).toBe(true);
+    expect(Array.isArray((result as any).warnings)).toBe(true);
+  });
+
+  it('emits no warnings for a valid spec', () => {
+    const md = `# API\n\n## Get users\n\n**Request** → \`GET /v1/users\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const { warnings } = parseMarkdownSpec(md) as any;
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('warns when a ## section has no valid steps (prose-only section)', () => {
+    const md = `# API\n\n## Introduction\n\nThis section has no request.\n`;
+    const { warnings } = parseMarkdownSpec(md) as any;
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toMatch(/Introduction/);
+  });
+
+  it('warns when Request has no Response status code (step silently dropped today)', () => {
+    const md = `# API\n\n## Bad response\n\n**Request** → \`GET /v1/test\`\n\n**Response** → \`OK\`\n`;
+    const { tests, warnings } = parseMarkdownSpec(md) as any;
+    // Step is still dropped — test should be empty
+    expect(tests).toHaveLength(0);
+    // But now we warn about it instead of silently discarding
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toMatch(/Bad response/i);
+  });
+
+  it('warns when Request has no method match (invalid method)', () => {
+    const md = `# API\n\n## Bad method\n\n**Request** → \`INVALID /v1/test\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const { warnings } = parseMarkdownSpec(md) as any;
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('no warnings when all sections have valid steps', () => {
+    const md = `# API\n\n## A\n\n**Request** → \`GET /v1/a\`\n\n**Response** → \`🟢 200 OK\`\n\n## B\n\n**Request** → \`GET /v1/b\`\n\n**Response** → \`🟢 200 OK\`\n`;
+    const { warnings } = parseMarkdownSpec(md) as any;
+    expect(warnings).toHaveLength(0);
+  });
+});
+
 describe('parser edge cases', () => {
   it('handles empty input', () => {
-    expect(parseMarkdownSpec('')).toEqual([]);
+    expect(parseMarkdownSpec('').tests).toEqual([]);
   });
 
   it('handles input with only a title and no tests', () => {
-    expect(parseMarkdownSpec('# My API\n\nSome intro text.\n')).toEqual([]);
+    expect(parseMarkdownSpec('# My API\n\nSome intro text.\n').tests).toEqual([]);
   });
 
   it('handles ## heading with no request/response pairs', () => {
@@ -17,7 +68,7 @@ describe('parser edge cases', () => {
 
 Some text but no request or response blocks.
 `;
-    expect(parseMarkdownSpec(md)).toEqual([]);
+    expect(parseMarkdownSpec(md).tests).toEqual([]);
   });
 
   it('handles multiple ## headings, only some with request/response', () => {
@@ -37,7 +88,7 @@ Just docs, no test.
 
 More docs here.
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].name).toBe('Actual test');
   });
@@ -51,7 +102,7 @@ More docs here.
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toEqual([]);
   });
 
@@ -64,7 +115,7 @@ More docs here.
 
 **Response** → \`OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toEqual([]);
   });
 
@@ -81,7 +132,7 @@ More docs here.
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].method).toBe('PATCH');
   });
 
@@ -98,7 +149,7 @@ More docs here.
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].method).toBe('PUT');
   });
 
@@ -111,7 +162,7 @@ More docs here.
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].path).toBe('/v1/users?page=1&limit=10');
   });
 
@@ -124,7 +175,7 @@ More docs here.
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].path).toBe('/v1/docs#section-2');
   });
 
@@ -148,7 +199,7 @@ More docs here.
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].response).toEqual({
       user: { profile: { name: 'Sarah', age: 30 } },
     });
@@ -170,7 +221,7 @@ More docs here.
 ]
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].response).toEqual([
       { id: '1', name: 'First' },
       { id: '2', name: 'Second' },
@@ -194,7 +245,7 @@ More docs here.
 {}
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].body).toEqual({});
     expect(tests[0].steps[0].response).toEqual({});
   });
@@ -224,7 +275,7 @@ Authorization: Bearer key_b
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps).toHaveLength(2);
     expect(tests[0].steps[0].headers['Authorization']).toBe('Bearer key_a');
     expect(tests[0].steps[1].headers['Authorization']).toBe('Bearer key_b');
@@ -249,7 +300,7 @@ X-Custom: first
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].headers['X-Custom']).toBe('first');
     expect(tests[0].steps[1].headers['X-Custom']).toBeUndefined();
   });
@@ -269,7 +320,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].headers['Authorization']).toBe('Bearer abc:def:ghi');
   });
 
@@ -290,14 +341,14 @@ Authorization: Bearer abc:def:ghi
     ];
     for (const { md: statusLine, expected } of codes) {
       const fullMd = `# API\n\n## Test ${expected}\n\n**Request** → \`GET /v1/test\`\n\n**Response** → \`${statusLine}\`\n`;
-      const tests = parseMarkdownSpec(fullMd);
+      const { tests } = parseMarkdownSpec(fullMd);
       expect(tests[0].steps[0].status).toBe(expected);
     }
   });
 
   it('handles markdown with CRLF line endings', () => {
     const md = '# API\r\n\r\n## CRLF test\r\n\r\n**Request** → `GET /v1/test`\r\n\r\n**Response** → `🟢 200 OK`\r\n';
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].steps[0].method).toBe('GET');
   });
@@ -311,7 +362,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].name).toBe('Spaced test name');
   });
 
@@ -332,7 +383,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(2);
   });
 
@@ -365,7 +416,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps).toHaveLength(3);
   });
 
@@ -386,7 +437,7 @@ Authorization: Bearer abc:def:ghi
 {"result": null}
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].body).toEqual({ key: null });
     expect(tests[0].steps[0].response).toEqual({ result: null });
   });
@@ -409,7 +460,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const body = tests[0].steps[0].body;
     expect(body.active).toBe(true);
     expect(body.count).toBe(42);
@@ -439,7 +490,7 @@ Authorization: Bearer abc:def:ghi
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const ann = tests[0].steps[0].responseAnnotations;
     expect(ann['event_id']).toBe('save as: $eid');
     expect(ann['status']).toBe('one of: received, processing');
@@ -463,7 +514,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].body.long_key).toBe('x'.repeat(500));
     expect(tests[0].steps[0].body.normal).toBe('hello');
   });
@@ -480,7 +531,7 @@ Authorization: Bearer abc:def:ghi
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     // Empty JSON block should be treated as null body
     expect(tests[0].steps[0].body).toBeNull();
   });

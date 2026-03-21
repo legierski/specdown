@@ -25,7 +25,7 @@ describe('parseMarkdownSpec', () => {
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].name).toBe('Create a user');
     expect(tests[0].steps).toHaveLength(1);
@@ -54,7 +54,7 @@ describe('parseMarkdownSpec', () => {
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     const step = tests[0].steps[0];
     expect(step.method).toBe('GET');
@@ -88,7 +88,7 @@ describe('parseMarkdownSpec', () => {
 
 **Response** → \`🟢 201 Created\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(3);
     expect(tests[0].name).toBe('First test');
     expect(tests[1].name).toBe('Second test');
@@ -125,7 +125,7 @@ describe('parseMarkdownSpec', () => {
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].steps).toHaveLength(2);
     expect(tests[0].steps[0].method).toBe('POST');
@@ -141,7 +141,7 @@ describe('parseMarkdownSpec', () => {
 
 **Response** → \`🟢 204 No Content\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     const step = tests[0].steps[0];
     expect(step.method).toBe('DELETE');
@@ -164,7 +164,7 @@ describe('parseMarkdownSpec', () => {
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].steps[0].status).toBe(404);
   });
@@ -189,7 +189,7 @@ describe('parseMarkdownSpec', () => {
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.responseAnnotations['event_id']).toBe('save as: $event_id');
   });
@@ -214,7 +214,7 @@ X-Custom: value
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.headers['Authorization']).toBe('Bearer custom_key');
     expect(step.headers['X-Custom']).toBe('value');
@@ -235,7 +235,7 @@ Authorization: none
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.headers['Authorization']).toBe('none');
   });
@@ -257,7 +257,7 @@ Authorization: none
 }
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.response).toEqual({ id: '1', name: 'Sarah' });
   });
@@ -271,7 +271,7 @@ Authorization: none
 
 **Response** -> \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].steps[0].method).toBe('GET');
     expect(tests[0].steps[0].path).toBe('/v1/test');
@@ -301,7 +301,7 @@ Now let's check the response.
 
 And that's how you create a user.
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     expect(tests[0].steps[0].body).toEqual({ name: 'Sarah' });
     expect(tests[0].steps[0].response).toEqual({ id: '1' });
@@ -313,19 +313,19 @@ And that's how you create a user.
 
   it('parses status with no emoji', () => {
     const md = `# API\n\n## Test\n\n**Request** → \`GET /v1/ping\`\n\n**Response** → \`200 OK\`\n`;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].status).toBe(200);
   });
 
   it('parses status with arbitrary emoji (not 🟢)', () => {
     const md = `# API\n\n## Test\n\n**Request** → \`GET /v1/ping\`\n\n**Response** → \`🚀 201 Created\`\n`;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].status).toBe(201);
   });
 
   it('parses status with multiple emoji', () => {
     const md = `# API\n\n## Test\n\n**Request** → \`DELETE /v1/resource\`\n\n**Response** → \`⚠️ 🔴 404 Not Found\`\n`;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].status).toBe(404);
   });
 
@@ -349,7 +349,7 @@ X-Custom: injected
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     // Headers after Request should apply to THIS step (same as if before)
     expect(step.headers['Authorization']).toBe('');
@@ -377,7 +377,7 @@ X-Step: one
 
 **Response** → \`🟢 200 OK\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests[0].steps[0].headers['X-Step']).toBe('one');
     expect(tests[1].steps[0].headers['X-Step']).toBeUndefined();
   });

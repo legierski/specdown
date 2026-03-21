@@ -49,7 +49,7 @@ X-Version: 2
 {"id": 1}
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     expect(tests).toHaveLength(1);
     const step = tests[0].steps[0];
     expect(step.responseHeaders).toBeDefined();
@@ -71,7 +71,7 @@ X-Version: 2
 {"status": "ok"}
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.responseHeaders).toEqual({});
   });
@@ -92,7 +92,7 @@ X-Version: 2
 content-type: application/json
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.responseHeaders!['content-type']).toBe('application/json');
   });
@@ -113,7 +113,7 @@ content-type: application/json
 X-Powered-By: specdown
 \`\`\`
 `;
-    const tests = parseMarkdownSpec(md);
+    const { tests } = parseMarkdownSpec(md);
     const step = tests[0].steps[0];
     expect(step.responseHeaders!['X-Powered-By']).toBe('specdown');
     expect(step.response).toBeNull();
