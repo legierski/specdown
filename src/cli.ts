@@ -23,6 +23,7 @@ export interface CliOptions {
   format: 'pretty' | 'json';
   config: SpecConfig;
   filter: string | null;
+  baseOverridden: boolean;
 }
 
 export function parseArgs(args: string[]): CliOptions {
@@ -30,6 +31,8 @@ export function parseArgs(args: string[]): CliOptions {
   const targets: string[] = [];
   let format: 'pretty' | 'json' = 'pretty';
   let filter: string | null = null;
+  let base = 'http://localhost:3000';
+  let baseOverridden = false;
 
   let i = 1;
   while (i < args.length) {
@@ -37,7 +40,9 @@ export function parseArgs(args: string[]): CliOptions {
       format = args[i + 1] as 'pretty' | 'json';
       i += 2;
     } else if (args[i] === '--base' && args[i + 1]) {
-      i += 2; // handled below in config
+      base = args[i + 1];
+      baseOverridden = true;
+      i += 2;
     } else if (args[i] === '--test' && args[i + 1]) {
       filter = args[i + 1];
       i += 2;
@@ -49,11 +54,6 @@ export function parseArgs(args: string[]): CliOptions {
     }
   }
 
-  // Parse --base from original args
-  const baseIdx = args.indexOf('--base');
-  const base = baseIdx !== -1 && args[baseIdx + 1] ? args[baseIdx + 1] : 'http://localhost:3000';
-
-  // TODO: parse .specdown config file
   const config: SpecConfig = {
     http: {
       base,
@@ -61,7 +61,7 @@ export function parseArgs(args: string[]): CliOptions {
     },
   };
 
-  return { command, targets, format, config, filter };
+  return { command, targets, format, config, filter, baseOverridden };
 }
 
 export function findSpecFiles(target: string): string[] {
@@ -159,8 +159,8 @@ Try: specdown run api.spec.md  or  specdown run <directory>`);
     if (fm?.http) {
       fileConfig = mergeConfigs(fileConfig, fm);
     }
-    // CLI --base flag overrides everything
-    if (opts.config.http.base !== 'http://localhost:3000') {
+    // CLI --base flag overrides everything (use boolean flag, not value comparison)
+    if (opts.baseOverridden) {
       fileConfig = mergeConfigs(fileConfig, { http: { base: opts.config.http.base, headers: {} } });
     }
 

@@ -486,3 +486,28 @@ describe('findSpecFiles error handling', () => {
     errorSpy.mockRestore();
   });
 });
+
+// ──────────────────────────────────────
+// Bug: --base http://localhost:3000 silently ignored
+// ──────────────────────────────────────
+
+describe('parseArgs --base sentinel bug', () => {
+  it('tracks whether --base was explicitly passed (not by value comparison)', () => {
+    // Bug: cli.ts compared opts.config.http.base !== 'http://localhost:3000' to detect
+    // whether --base was passed. If user passes --base http://localhost:3000 explicitly,
+    // the flag was silently ignored and frontmatter base would win instead.
+    const opts = parseArgs(['run', 'api.spec.md', '--base', 'http://localhost:3000']);
+    // The fix: a boolean flag, not a value comparison
+    expect(opts.baseOverridden).toBe(true);
+  });
+
+  it('baseOverridden is false when --base not passed', () => {
+    const opts = parseArgs(['run', 'api.spec.md']);
+    expect(opts.baseOverridden).toBe(false);
+  });
+
+  it('baseOverridden is true for any --base value', () => {
+    const opts = parseArgs(['run', '--base', 'https://staging.api.com']);
+    expect(opts.baseOverridden).toBe(true);
+  });
+});
