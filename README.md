@@ -201,6 +201,8 @@ Content-Type: application/json; charset=xxxxx
 
 ## CLI mode — testing command-line tools
 
+> ⚠️ **CLI mode executes shell commands on your machine.** Only run specs you trust. Treat `.spec.md` files with `**Run**` blocks like shell scripts — review before running.
+
 Use `**Run**` and `**Output**` instead of `**Request**` and `**Response**` to test CLI tools:
 
 ````markdown
@@ -293,9 +295,11 @@ Authorization: Bearer $api_token
 
 ### Timeout
 
-CLI commands use the same timeout as HTTP steps (from config or frontmatter). Commands that exceed the timeout are killed and the test fails.
+CLI steps use `cli.timeout` from the `[cli]` TOML section if set, otherwise fall back to the HTTP timeout. Commands that exceed the timeout are killed and the test fails.
 
 ## SQL mode — testing databases
+
+> ⚠️ **SQL mode executes queries against real databases.** Only run specs you trust. Treat `.spec.md` files with `**Query**` blocks like SQL scripts — review before running.
 
 Use `**Query**` and `**Result**` to test databases directly. Currently supports SQLite via the `sqlite3` CLI.
 
@@ -436,6 +440,8 @@ headers:
 ```
 
 Supported fields: `base`, `timeout`, `headers`, `connection`, `shell`. Unknown fields emit a warning.
+
+> **Note:** `timeout` in frontmatter applies to HTTP mode. For mode-specific timeouts, use the `[cli]` and `[sql]` sections in `.specdown` TOML config. CLI and SQL steps fall back to the HTTP timeout if no mode-specific timeout is set.
 
 Frontmatter merges with `.specdown` config (frontmatter wins per-key). The `--base` CLI flag overrides frontmatter base (but not headers or timeout).
 
